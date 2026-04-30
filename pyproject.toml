@@ -44,6 +44,10 @@ test = [
     "pytest-asyncio>=0.21",
     "hypothesis>=6.0",
 ]
+examples = [
+    "marimo>=0.8.0",
+    "jupyter>=1.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/FranekJemiolo/vectrill"
