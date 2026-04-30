@@ -5,11 +5,12 @@
 //! - Rust execution core
 //! - Python DSL and control plane (via PyO3)
 
-pub mod connectors;
-pub mod error;
-pub mod ingestion;
-pub mod operators;
 pub mod sequencer;
+pub mod operators;
+pub mod ingestion;
+pub mod connectors;
+pub mod expression;
+pub mod error;
 
 #[cfg(feature = "cli")]
 pub mod cli;

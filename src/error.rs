@@ -28,6 +28,14 @@ pub enum VectrillError {
     #[error("Invalid expression: {0}")]
     InvalidExpression(String),
 
+    /// Expression error
+    #[error("Expression error: {0}")]
+    ExpressionError(String),
+
+    /// Arrow error (string wrapper)
+    #[error("Arrow error: {0}")]
+    ArrowError(String),
+
     /// Execution error
     #[error("Execution error: {0}")]
     Execution(String),
