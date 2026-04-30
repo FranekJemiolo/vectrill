@@ -15,40 +15,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # This job runs regardless of Pages configuration
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Pages
-        id: pages
+      - name: Setup Pages (attempt auto-enable)
+        id: pages-setup
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
         continue-on-error: true
 
       - name: Build with Jekyll
-        if: steps.pages.outcome == 'success'
+        if: steps.pages-setup.outcome == 'success' || steps.pages-setup.outcome == 'skipped'
         uses: actions/jekyll-build-pages@v1
         with:
           source: ./
           destination: ./_site
 
       - name: Upload artifact
-        if: steps.pages.outcome == 'success'
+        if: steps.pages-setup.outcome == 'success' || steps.pages-setup.outcome == 'skipped'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./_site
 
-      - name: Setup Instructions
-        if: steps.pages.outcome == 'failure'
+      - name: Pages Setup Instructions
+        if: steps.pages-setup.outcome == 'failure'
         run: |
-          echo "::warning::GitHub Pages not configured. Please enable Pages manually:"
-          echo "1. Go to repository Settings > Pages"
-          echo "2. Set Source to 'Deploy from a branch'"
-          echo "3. Select 'main' branch and '/ (root)' folder"
-          echo "4. Click Save"
-          echo "5. Re-run this workflow or push to trigger again"
+          echo "::warning ::GitHub Pages requires manual setup for this repository"
+          echo "::warning ::Please follow these steps:"
+          echo "::warning ::1. Go to: https://github.com/FranekJemiolo/vectrill/settings/pages"
+          echo "::warning ::2. Under 'Build and deployment', set Source to 'Deploy from a branch'"
+          echo "::warning ::3. Select 'main' branch and '/ (root)' folder"
+          echo "::warning ::4. Click Save"
+          echo "::warning ::5. Push any change or re-run this workflow to deploy"
 
+  # This job only runs if Pages is properly configured
   deploy:
     environment:
       name: github-pages
