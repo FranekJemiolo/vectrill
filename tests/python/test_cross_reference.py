@@ -1,15 +1,22 @@
 """Cross-reference tests comparing vectrill with pandas and polars."""
 
-import pandas as pd
 import polars as pl
 import pyarrow as pa
+import pyarrow.compute as pc
 import numpy as np
 import pytest
+
+try:
+    import pandas as pd
+    HAS_PANDAS = True
+except ImportError:
+    HAS_PANDAS = False
 
 
 class TestExpressionCrossReference:
     """Test expression evaluation against pandas/polars for correctness."""
 
+    @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
     def test_binary_operations_add(self):
         """Test addition operation."""
         # Create test data
@@ -28,6 +35,7 @@ class TestExpressionCrossReference:
         actual = result_polars["sum"].to_numpy()
         np.testing.assert_array_equal(actual, expected)
 
+    @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
     def test_binary_operations_subtract(self):
         """Test subtraction operation."""
         data = {"a": [10, 20, 30, 40, 50], "b": [1, 2, 3, 4, 5]}
@@ -42,6 +50,7 @@ class TestExpressionCrossReference:
         actual = result_polars["diff"].to_numpy()
         np.testing.assert_array_equal(actual, expected)
 
+    @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
     def test_binary_operations_multiply(self):
         """Test multiplication operation."""
         data = {"a": [2, 3, 4, 5, 6], "b": [7, 8, 9, 10, 11]}
@@ -56,6 +65,7 @@ class TestExpressionCrossReference:
         actual = result_polars["product"].to_numpy()
         np.testing.assert_array_equal(actual, expected)
 
+    @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
     def test_binary_operations_divide(self):
         """Test division operation."""
         data = {"a": [20, 40, 60, 80, 100], "b": [2, 4, 6, 8, 10]}
@@ -70,6 +80,7 @@ class TestExpressionCrossReference:
         actual = result_polars["quotient"].to_numpy()
         np.testing.assert_array_almost_equal(actual, expected)
 
+    @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
     def test_comparison_operations_gt(self):
         """Test greater than comparison."""
         data = {"a": [5, 10, 15, 20, 25], "b": [10, 5, 20, 15, 30]}
@@ -84,6 +95,7 @@ class TestExpressionCrossReference:
         actual = result_polars["gt"].to_numpy()
         np.testing.assert_array_equal(actual, expected)
 
+    @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
     def test_comparison_operations_lt(self):
         """Test less than comparison."""
         data = {"a": [5, 10, 15, 20, 25], "b": [10, 5, 20, 15, 30]}
@@ -98,6 +110,7 @@ class TestExpressionCrossReference:
         actual = result_polars["lt"].to_numpy()
         np.testing.assert_array_equal(actual, expected)
 
+    @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
     def test_filter_operations(self):
         """Test filter operations."""
         data = {"a": [1, 2, 3, 4, 5], "b": [10, 20, 30, 40, 50]}
@@ -111,6 +124,7 @@ class TestExpressionCrossReference:
         np.testing.assert_array_equal(result_polars["a"].to_numpy(), result_pandas["a"].to_numpy())
         np.testing.assert_array_equal(result_polars["b"].to_numpy(), result_pandas["b"].to_numpy())
 
+    @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
     def test_aggregation_sum(self):
         """Test sum aggregation."""
         data = {"a": [1, 2, 3, 4, 5], "b": [10, 20, 30, 40, 50]}
@@ -123,6 +137,7 @@ class TestExpressionCrossReference:
         
         assert result_polars == result_pandas
 
+    @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
     def test_aggregation_mean(self):
         """Test mean aggregation."""
         data = {"a": [1, 2, 3, 4, 5], "b": [10, 20, 30, 40, 50]}
@@ -135,6 +150,7 @@ class TestExpressionCrossReference:
         
         assert result_polars == result_pandas
 
+    @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
     def test_aggregation_min_max(self):
         """Test min and max aggregations."""
         data = {"a": [5, 2, 8, 1, 9], "b": [10, 20, 30, 40, 50]}
@@ -150,6 +166,7 @@ class TestExpressionCrossReference:
         assert min_polars == min_pandas
         assert max_polars == max_pandas
 
+    @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
     def test_boolean_operations_and(self):
         """Test boolean AND operation."""
         data = {"a": [True, True, False, False, True], "b": [True, False, True, False, True]}
@@ -164,6 +181,7 @@ class TestExpressionCrossReference:
         actual = result_polars["and"].to_numpy()
         np.testing.assert_array_equal(actual, expected)
 
+    @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
     def test_boolean_operations_or(self):
         """Test boolean OR operation."""
         data = {"a": [True, True, False, False, True], "b": [True, False, True, False, True]}
@@ -178,6 +196,7 @@ class TestExpressionCrossReference:
         actual = result_polars["or"].to_numpy()
         np.testing.assert_array_equal(actual, expected)
 
+    @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
     def test_string_operations(self):
         """Test string operations."""
         data = {"names": ["alice", "bob", "charlie", "david"]}
@@ -192,6 +211,7 @@ class TestExpressionCrossReference:
         actual = result_polars["upper"].to_numpy()
         np.testing.assert_array_equal(actual, expected)
 
+    @pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
     def test_null_handling(self):
         """Test null handling."""
         data = {"a": [1, 2, None, 4, 5], "b": [10, None, 30, 40, 50]}
