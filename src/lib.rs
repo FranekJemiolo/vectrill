@@ -1,5 +1,4 @@
 //! Vectrill: High-performance Arrow-native streaming engine
-//!
 //! This library provides a single-node streaming execution engine with:
 //! - Arrow-native columnar memory (zero-copy)
 //! - Rust execution core
@@ -8,13 +7,13 @@
 pub mod connectors;
 pub mod error;
 pub mod expression;
-pub mod ingestion;
-pub mod metrics;
 pub mod operators;
 pub mod optimization;
 pub mod planner;
 pub mod sequencer;
 pub mod streaming;
+pub mod memory;
+pub mod metrics;
 
 #[cfg(feature = "cli")]
 pub mod cli;
@@ -25,10 +24,18 @@ pub mod ffi;
 #[cfg(feature = "web-ui")]
 pub mod web;
 
+pub use connectors::{Connector, FileConnector};
+pub use error::{Result, VectrillError};
+pub use expression::{Expr, ExprType, ScalarValue, UnaryOp};
+pub use operators::Operator;
+pub use optimization::{ExprOptimizer, FusedOperator};
+pub use planner::{LogicalPlan, PhysicalPlan, ExecutionGraph};
+pub use sequencer::Sequencer;
+pub use streaming::{Watermark, window, WindowState};
+pub use metrics::{Metric, MetricType, MetricsRegistry, global_registry};
+pub use memory::{BufferPool, global_buffer_pool};
 pub use arrow::datatypes::SchemaRef;
 pub use arrow::record_batch::RecordBatch;
-pub use error::{Result, VectrillError};
-pub use operators::{Operator, Pipeline};
 
 /// Re-export Arrow for convenience
 pub use arrow;
