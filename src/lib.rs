@@ -9,6 +9,7 @@ pub mod connectors;
 pub mod error;
 pub mod expression;
 pub mod ingestion;
+pub mod metrics;
 pub mod operators;
 pub mod optimization;
 pub mod planner;
@@ -20,6 +21,9 @@ pub mod cli;
 
 #[cfg(feature = "python")]
 pub mod ffi;
+
+#[cfg(feature = "web-ui")]
+pub mod web;
 
 pub use arrow::datatypes::SchemaRef;
 pub use arrow::record_batch::RecordBatch;

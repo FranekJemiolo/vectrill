@@ -1,0 +1,83 @@
+//! Web server implementation using Axum
+
+use crate::metrics::MetricsRegistry;
+use axum::{
+    extract::State,
+    response::{Html, Json},
+    routing::get,
+    Router,
+};
+use serde::Serialize;
+use std::sync::Arc;
+use tower_http::cors::{Any, CorsLayer};
+
+/// Metrics response
+#[derive(Debug, Serialize)]
+struct MetricsResponse {
+    metrics: Vec<crate::metrics::Metric>,
+}
+
+/// Health check response
+#[derive(Debug, Serialize)]
+struct HealthResponse {
+    status: String,
+    version: String,
+}
+
+/// Job info (placeholder for now)
+#[derive(Debug, Serialize)]
+struct JobInfo {
+    id: String,
+    status: String,
+    created_at: String,
+}
+
+/// Create the web router
+pub fn create_router(registry: Arc<MetricsRegistry>) -> Router {
+    Router::new()
+        .route("/", get(dashboard))
+        .route("/health", get(health_check))
+        .route("/api/metrics", get(get_metrics))
+        .route("/api/jobs", get(list_jobs))
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        )
+        .with_state(registry)
+}
+
+/// Dashboard endpoint
+async fn dashboard() -> Html<&'static str> {
+    Html(include_str!("static/index.html"))
+}
+
+/// Health check endpoint
+async fn health_check() -> Json<HealthResponse> {
+    Json(HealthResponse {
+        status: "healthy".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+    })
+}
+
+/// Get metrics endpoint
+async fn get_metrics(State(registry): State<Arc<MetricsRegistry>>) -> Json<MetricsResponse> {
+    let metrics = registry.get_metrics().await;
+    Json(MetricsResponse { metrics })
+}
+
+/// List jobs endpoint (placeholder)
+async fn list_jobs() -> Json<Vec<JobInfo>> {
+    Json(vec![])
+}
+
+/// Run the web server
+pub async fn run_server(addr: &str, registry: Arc<MetricsRegistry>) -> Result<(), Box<dyn std::error::Error>> {
+    let app = create_router(registry);
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    println!("Web server listening on {}", addr);
+    
+    axum::serve(listener, app).await?;
+    Ok(())
+}

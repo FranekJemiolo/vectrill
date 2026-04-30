@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vectrill Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            background: #1e293b;
+            padding: 20px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 20px;
+        }
+        h1 {
+            font-size: 24px;
+            color: #38bdf8;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            background: #22c55e;
+            color: white;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .card h2 {
+            font-size: 16px;
+            color: #94a3b8;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .metric-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #38bdf8;
+        }
+        .metric-label {
+            font-size: 14px;
+            color: #94a3b8;
+            margin-top: 5px;
+        }
+        .jobs-section {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .jobs-section h2 {
+            font-size: 16px;
+            color: #94a3b8;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .job-list {
+            list-style: none;
+        }
+        .job-item {
+            padding: 10px;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .job-item:last-child {
+            border-bottom: none;
+        }
+        .job-id {
+            font-family: monospace;
+            color: #38bdf8;
+        }
+        .job-status {
+            padding: 4px 12px;
+            border-radius: 4px;
+            background: #22c55e;
+            color: white;
+            font-size: 12px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+        .refresh-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .refresh-btn:hover {
+            background: #2563eb;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Vectrill Dashboard <span class="status">v0.1.0</span></h1>
+        </div>
+    </header>
+    <div class="container">
+        <div class="metrics-grid">
+            <div class="card">
+                <h2>Total Jobs</h2>
+                <div class="metric-value" id="total-jobs">0</div>
+                <div class="metric-label">Jobs processed</div>
+            </div>
+            <div class="card">
+                <h2>Active Jobs</h2>
+                <div class="metric-value" id="active-jobs">0</div>
+                <div class="metric-label">Currently running</div>
+            </div>
+            <div class="card">
+                <h2>Batches Processed</h2>
+                <div class="metric-value" id="batches-processed">0</div>
+                <div class="metric-label">Total batches</div>
+            </div>
+            <div class="card">
+                <h2>Rows Processed</h2>
+                <div class="metric-value" id="rows-processed">0</div>
+                <div class="metric-label">Total rows</div>
+            </div>
+        </div>
+        
+        <div class="jobs-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2>Recent Jobs</h2>
+                <button class="refresh-btn" onclick="refreshData()">Refresh</button>
+            </div>
+            <ul class="job-list" id="job-list">
+                <li class="empty-state">No jobs yet</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        async function fetchMetrics() {
+            try {
+                const response = await fetch('/api/metrics');
+                const data = await response.json();
+                return data.metrics;
+            } catch (error) {
+                console.error('Failed to fetch metrics:', error);
+                return [];
+            }
+        }
+
+        async function fetchJobs() {
+            try {
+                const response = await fetch('/api/jobs');
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Failed to fetch jobs:', error);
+                return [];
+            }
+        }
+
+        async function refreshData() {
+            const metrics = await fetchMetrics();
+            const jobs = await fetchJobs();
+            
+            // Update metrics display
+            const totalJobs = metrics.find(m => m.name === 'jobs_total');
+            const activeJobs = metrics.find(m => m.name === 'jobs_active');
+            const batchesProcessed = metrics.find(m => m.name === 'batches_processed');
+            const rowsProcessed = metrics.find(m => m.name === 'rows_processed');
+            
+            document.getElementById('total-jobs').textContent = 
+                totalJobs ? totalJobs.value.Counter || 0 : 0;
+            document.getElementById('active-jobs').textContent = 
+                activeJobs ? activeJobs.value.Counter || 0 : 0;
+            document.getElementById('batches-processed').textContent = 
+                batchesProcessed ? batchesProcessed.value.Counter || 0 : 0;
+            document.getElementById('rows-processed').textContent = 
+                rowsProcessed ? rowsProcessed.value.Counter || 0 : 0;
+            
+            // Update jobs list
+            const jobList = document.getElementById('job-list');
+            if (jobs.length === 0) {
+                jobList.innerHTML = '<li class="empty-state">No jobs yet</li>';
+            } else {
+                jobList.innerHTML = jobs.map(job => `
+                    <li class="job-item">
+                        <span class="job-id">${job.id}</span>
+                        <span class="job-status">${job.status}</span>
+                    </li>
+                `).join('');
+            }
+        }
+
+        // Auto-refresh every 5 seconds
+        refreshData();
+        setInterval(refreshData, 5000);
+    </script>
+</body>
+</html>
