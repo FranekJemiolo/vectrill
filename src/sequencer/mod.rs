@@ -104,7 +104,7 @@ impl Sequencer {
     }
 
     /// Flush the current output buffer as a batch
-    fn flush(&mut self) -> Option<RecordBatch> {
+    pub fn flush(&mut self) -> Option<RecordBatch> {
         if self.output_buffer.is_empty() {
             return None;
         }
@@ -172,6 +172,16 @@ impl Sequencer {
         self.update_watermark();
 
         result
+    }
+
+    /// Get the current watermark
+    pub fn watermark(&self) -> i64 {
+        self.watermark
+    }
+    
+    /// Get the number of pending batches
+    pub fn pending_batches(&self) -> usize {
+        self.cursors.len()
     }
 
     /// Advance a cursor to the next row
