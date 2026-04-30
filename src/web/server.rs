@@ -2,7 +2,7 @@
 
 use crate::metrics::MetricsRegistry;
 use axum::{
-    extract::State,
+    extract::{Path, State},
     response::{Html, Json},
     routing::get,
     Router,
@@ -24,6 +24,22 @@ struct HealthResponse {
     version: String,
 }
 
+/// Job detail response
+#[derive(Debug, Serialize)]
+struct JobDetail {
+    id: String,
+    status: String,
+    created_at: String,
+    query_plan: Option<QueryPlanNode>,
+}
+
+/// Query plan node
+#[derive(Debug, Serialize)]
+struct QueryPlanNode {
+    operator: String,
+    children: Option<Vec<QueryPlanNode>>,
+}
+
 /// Job info (placeholder for now)
 #[derive(Debug, Serialize)]
 struct JobInfo {
@@ -39,6 +55,7 @@ pub fn create_router(registry: Arc<MetricsRegistry>) -> Router {
         .route("/health", get(health_check))
         .route("/api/metrics", get(get_metrics))
         .route("/api/jobs", get(list_jobs))
+        .route("/api/jobs/:id", get(get_job_detail))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -70,6 +87,34 @@ async fn get_metrics(State(registry): State<Arc<MetricsRegistry>>) -> Json<Metri
 /// List jobs endpoint (placeholder)
 async fn list_jobs() -> Json<Vec<JobInfo>> {
     Json(vec![])
+}
+
+/// Get job detail endpoint (placeholder)
+async fn get_job_detail(Path(id): Path<String>) -> Json<JobDetail> {
+    Json(JobDetail {
+        id,
+        status: "completed".to_string(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        query_plan: Some(QueryPlanNode {
+            operator: "Scan".to_string(),
+            children: Some(vec![
+                QueryPlanNode {
+                    operator: "Filter".to_string(),
+                    children: Some(vec![
+                        QueryPlanNode {
+                            operator: "Map".to_string(),
+                            children: Some(vec![
+                                QueryPlanNode {
+                                    operator: "Aggregate".to_string(),
+                                    children: None,
+                                },
+                            ]),
+                        },
+                    ]),
+                },
+            ]),
+        }),
+    })
 }
 
 /// Run the web server
