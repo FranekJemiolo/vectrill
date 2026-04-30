@@ -1,11 +1,14 @@
 //! CLI for Vectrill streaming engine
 
-#[cfg(feature = "cli")]
-use clap::Parser;
-use vectrill::{operators::{NoOpOperator, Pipeline}, RecordBatch};
 use arrow::array::{Int64Array, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
+#[cfg(feature = "cli")]
+use clap::Parser;
 use std::sync::Arc;
+use vectrill::{
+    operators::{NoOpOperator, Pipeline},
+    RecordBatch,
+};
 
 #[cfg(feature = "cli")]
 #[derive(Parser, Debug)]
@@ -20,9 +23,9 @@ struct Args {
 #[cfg(feature = "cli")]
 fn main() {
     tracing_subscriber::fmt::init();
-    
+
     let args = Args::parse();
-    
+
     if args.dummy {
         process_dummy_batch();
     } else {
@@ -39,7 +42,7 @@ fn main() {
 
 fn process_dummy_batch() {
     println!("Creating dummy batch...");
-    
+
     let schema = Schema::new(vec![
         Field::new("id", DataType::Int64, false),
         Field::new("name", DataType::Utf8, false),

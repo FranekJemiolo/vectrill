@@ -6,8 +6,11 @@
 //! - Python DSL and control plane (via PyO3)
 //! - Spark-like API with Flink-like streaming semantics
 
+pub mod connectors;
 pub mod error;
+pub mod ingestion;
 pub mod operators;
+pub mod sequencer;
 
 pub use arrow::array::RecordBatch;
 pub use arrow::datatypes::SchemaRef;

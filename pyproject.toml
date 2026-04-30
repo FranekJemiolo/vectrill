@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
+requires = ["maturin>=1.0,<2.0", ">=3.12"]
 build-backend = "maturin"
 
 [project]
@@ -7,7 +7,7 @@ name = "vectrill"
 version = "0.1.0"
 description = "High-performance Arrow-native streaming engine with Python DSL and Rust execution core"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 license = { text = "MIT OR Apache-2.0" }
 authors = [
     { name = "Franek Jemiolo", email = "franek@example.com" }
@@ -19,9 +19,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Rust",
     "Topic :: Database",
@@ -60,16 +57,16 @@ strip = true
 
 [tool.black]
 line-length = 100
-target-version = ["py39", "py310", "py311", "py312"]
+target-version = ["py312"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py312"
 select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["E501"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
