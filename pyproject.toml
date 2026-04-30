@@ -28,6 +28,7 @@ classifiers = [
 dependencies = [
     "polars>=0.20.0",
     "pyarrow>=14.0.0",
+    "pandas>=2.0.0",
 ]
 
 [project.optional-dependencies]
