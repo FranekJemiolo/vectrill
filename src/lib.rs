@@ -10,6 +10,7 @@ pub mod operators;
 pub mod ingestion;
 pub mod connectors;
 pub mod expression;
+pub mod planner;
 pub mod error;
 
 #[cfg(feature = "cli")]

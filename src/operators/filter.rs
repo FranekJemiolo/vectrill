@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use crate::expression::{PhysicalExpr, create_physical_expr, Expr, ExpressionError};
 use crate::error::VectrillError;
+use crate::operators::pipeline::Operator as PipelineOperator;
+use crate::RecordBatch;
 
 /// Filter operator that applies a predicate to filter records
 #[derive(Debug)]
@@ -61,6 +63,12 @@ impl FilterOperator {
         ).map_err(|e| VectrillError::ArrowError(e.to_string()))?;
         
         Ok(filtered_batch)
+    }
+}
+
+impl PipelineOperator for FilterOperator {
+    fn process(&mut self, batch: RecordBatch) -> crate::error::Result<RecordBatch> {
+        self.apply(&batch)
     }
 }
 

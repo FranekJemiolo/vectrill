@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use crate::expression::{PhysicalExpr, create_physical_expr, Expr, ExpressionError};
 use crate::error::VectrillError;
+use crate::operators::pipeline::Operator as PipelineOperator;
+use crate::RecordBatch;
 
 /// Map operator that computes new columns based on expressions
 #[derive(Debug)]
@@ -138,6 +140,12 @@ impl ProjectionOperator {
             .map_err(|e| VectrillError::ArrowError(e.to_string()))?;
         
         Ok(new_batch)
+    }
+}
+
+impl PipelineOperator for MapOperator {
+    fn process(&mut self, batch: RecordBatch) -> crate::error::Result<RecordBatch> {
+        self.apply(&batch)
     }
 }
 
