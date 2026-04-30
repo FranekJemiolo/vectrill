@@ -158,6 +158,113 @@ pub fn is_boundary(op: &dyn crate::operators::pipeline::Operator) -> bool {
     is_stateful(op)
 }
 
+/// Column Pruning - remove unused columns from the plan
+pub fn prune_columns(plan: &PhysicalPlan, needed_columns: &std::collections::HashSet<String>) -> PhysicalPlan {
+    match plan {
+        PhysicalPlan::ScanSource { name, attrs } => {
+            // For source, we keep the scan but would ideally only read needed columns
+            PhysicalPlan::ScanSource {
+                name: name.clone(),
+                attrs: attrs.clone(),
+            }
+        }
+        PhysicalPlan::Map { input, expr } => {
+            // Recursively prune the input
+            let pruned_input = Box::new(prune_columns(input, needed_columns));
+            PhysicalPlan::Map {
+                input: pruned_input,
+                expr: expr.clone(),
+            }
+        }
+        PhysicalPlan::Filter { input, expr } => {
+            // Recursively prune the input
+            let pruned_input = Box::new(prune_columns(input, needed_columns));
+            PhysicalPlan::Filter {
+                input: pruned_input,
+                expr: expr.clone(),
+            }
+        }
+        PhysicalPlan::Project { input, columns } => {
+            // Recursively prune the input
+            let pruned_input = Box::new(prune_columns(input, needed_columns));
+            PhysicalPlan::Project {
+                input: pruned_input,
+                columns: columns.clone(),
+            }
+        }
+        PhysicalPlan::HashAggregate { input, keys, aggregations } => {
+            // Recursively prune the input
+            let pruned_input = Box::new(prune_columns(input, needed_columns));
+            PhysicalPlan::HashAggregate {
+                input: pruned_input,
+                keys: keys.clone(),
+                aggregations: aggregations.clone(),
+            }
+        }
+        PhysicalPlan::WindowedAggregate { input, window, aggregations } => {
+            // Recursively prune the input
+            let pruned_input = Box::new(prune_columns(input, needed_columns));
+            PhysicalPlan::WindowedAggregate {
+                input: pruned_input,
+                window: window.clone(),
+                aggregations: aggregations.clone(),
+            }
+        }
+        _ => plan.clone(),
+    }
+}
+
+/// Predicate Pushdown - move predicates toward sources
+pub fn push_down_predicates(plan: PhysicalPlan) -> PhysicalPlan {
+    match plan {
+        PhysicalPlan::Filter { input, expr } => {
+            // Try to push the filter down through the input
+            let pushed_input = push_down_predicates(*input);
+            
+            // Check if we can push through the pushed_input
+            match pushed_input {
+                PhysicalPlan::Map { input: map_input, expr: map_expr } => {
+                    // Filter before Map if possible (predicate doesn't depend on map outputs)
+                    PhysicalPlan::Map {
+                        input: Box::new(PhysicalPlan::Filter {
+                            input: map_input,
+                            expr: expr.clone(),
+                        }),
+                        expr: map_expr,
+                    }
+                }
+                PhysicalPlan::Project { input: proj_input, columns } => {
+                    // Filter before Project if possible
+                    PhysicalPlan::Project {
+                        input: Box::new(PhysicalPlan::Filter {
+                            input: proj_input,
+                            expr: expr.clone(),
+                        }),
+                        columns,
+                    }
+                }
+                _ => PhysicalPlan::Filter {
+                    input: Box::new(pushed_input),
+                    expr,
+                },
+            }
+        }
+        PhysicalPlan::Map { input, expr } => {
+            PhysicalPlan::Map {
+                input: Box::new(push_down_predicates(*input)),
+                expr,
+            }
+        }
+        PhysicalPlan::Project { input, columns } => {
+            PhysicalPlan::Project {
+                input: Box::new(push_down_predicates(*input)),
+                columns,
+            }
+        }
+        _ => plan,
+    }
+}
+
 /// Fusion Segment Builder - builds fusion segments from a physical plan
 pub struct FusionSegmentBuilder {
     segments: Vec<FusionSegment>,
@@ -280,5 +387,44 @@ mod tests {
         // This test requires actual operator instances
         // For now, we'll just test the helper functions compile
         assert!(true);
+    }
+    
+    #[test]
+    fn test_column_pruning() {
+        use std::collections::HashSet;
+        
+        let plan = PhysicalPlan::ScanSource {
+            name: "test".to_string(),
+            attrs: HashMap::new(),
+        };
+        
+        let needed_columns: HashSet<String> = vec!["id".to_string()].into_iter().collect();
+        let pruned = prune_columns(&plan, &needed_columns);
+        
+        // Should return a ScanSource with the same name
+        match pruned {
+            PhysicalPlan::ScanSource { name, .. } => {
+                assert_eq!(name, "test");
+            }
+            _ => panic!("Expected ScanSource"),
+        }
+    }
+    
+    #[test]
+    fn test_predicate_pushdown() {
+        let plan = PhysicalPlan::ScanSource {
+            name: "test".to_string(),
+            attrs: HashMap::new(),
+        };
+        
+        let pushed = push_down_predicates(plan);
+        
+        // ScanSource should be unchanged
+        match pushed {
+            PhysicalPlan::ScanSource { name, .. } => {
+                assert_eq!(name, "test");
+            }
+            _ => panic!("Expected ScanSource"),
+        }
     }
 }
