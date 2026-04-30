@@ -33,7 +33,7 @@ Micro-batched outputs
 
 ### Completed Milestones
 - ✅ **M0**: Core Engine Skeleton - Basic operator trait and pipeline
-- 🔄 **M1**: Sequencer + Micro-batching (in progress)
+- ✅ **M1**: Sequencer + Micro-batching - Event ordering and watermarks
 - ⏳ **M2**: Python Integration (FFI)
 - ⏳ **M3**: Expression Engine
 - ⏳ **M4**: Query Planner
@@ -85,12 +85,17 @@ for batch in stream.execute():
 
 ### Prerequisites
 - Rust 1.70+
-- Python 3.9+
-- maturin (for Python bindings)
+- Python 3.12+
+- uv (for Python dependency management)
+- maturin (for Python bindings, when M2 is complete)
 
 ### Build
 
 ```bash
+# Install Python dependencies
+uv sync
+uv sync --dev  # Include dev dependencies
+
 # Check code
 cargo check
 
@@ -100,7 +105,7 @@ cargo test
 # Build with CLI
 cargo build --features cli
 
-# Build Python package
+# Build Python package (when M2 is complete)
 maturin develop
 ```
 
