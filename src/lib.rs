@@ -14,6 +14,7 @@ pub mod sequencer;
 pub mod streaming;
 pub mod memory;
 pub mod metrics;
+pub mod performance;
 
 #[cfg(feature = "cli")]
 pub mod cli;
@@ -34,6 +35,7 @@ pub use sequencer::Sequencer;
 pub use streaming::{Watermark, window, WindowState};
 pub use metrics::{Metric, MetricType, MetricsRegistry, global_registry};
 pub use memory::{BufferPool, global_buffer_pool};
+pub use performance::{Counter, CounterType, CounterRegistry, Timer, global_counter_registry};
 pub use arrow::datatypes::SchemaRef;
 pub use arrow::record_batch::RecordBatch;
 
