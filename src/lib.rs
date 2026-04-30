@@ -13,6 +13,7 @@ pub mod operators;
 pub mod optimization;
 pub mod planner;
 pub mod sequencer;
+pub mod streaming;
 
 #[cfg(feature = "cli")]
 pub mod cli;
