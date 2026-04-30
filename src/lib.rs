@@ -10,6 +10,7 @@ pub mod error;
 pub mod expression;
 pub mod ingestion;
 pub mod operators;
+pub mod optimization;
 pub mod planner;
 pub mod sequencer;
 

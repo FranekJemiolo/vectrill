@@ -5,6 +5,7 @@ use std::sync::Arc;
 use crate::error::VectrillError;
 use crate::expression::{create_physical_expr, Expr, PhysicalExpr};
 use crate::operators::pipeline::Operator as PipelineOperator;
+use crate::optimization::fusion::FusableOperator;
 use crate::RecordBatch;
 
 /// Map operator that computes new columns based on expressions
@@ -154,6 +155,22 @@ impl ProjectionOperator {
 impl PipelineOperator for MapOperator {
     fn process(&mut self, batch: RecordBatch) -> crate::error::Result<RecordBatch> {
         self.apply(&batch)
+    }
+}
+
+impl FusableOperator for MapOperator {
+    fn expressions(&self) -> Vec<&Expr> {
+        // MapOperator has PhysicalExpr, not Expr
+        // For fusion purposes, we'd need to convert back to Expr or store the original
+        vec![]
+    }
+    
+    fn predicate(&self) -> Option<&Expr> {
+        None
+    }
+    
+    fn projection(&self) -> Option<&[String]> {
+        None
     }
 }
 

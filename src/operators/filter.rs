@@ -5,6 +5,7 @@ use std::sync::Arc;
 use crate::error::VectrillError;
 use crate::expression::{create_physical_expr, Expr, PhysicalExpr};
 use crate::operators::pipeline::Operator as PipelineOperator;
+use crate::optimization::fusion::FusableOperator;
 use crate::RecordBatch;
 
 /// Filter operator that applies a predicate to filter records
@@ -79,6 +80,22 @@ impl FilterOperator {
 impl PipelineOperator for FilterOperator {
     fn process(&mut self, batch: RecordBatch) -> crate::error::Result<RecordBatch> {
         self.apply(&batch)
+    }
+}
+
+impl FusableOperator for FilterOperator {
+    fn expressions(&self) -> Vec<&Expr> {
+        vec![]
+    }
+    
+    fn predicate(&self) -> Option<&Expr> {
+        // FilterOperator has a predicate but it's a PhysicalExpr, not Expr
+        // For fusion purposes, we'd need to convert back to Expr or store the original
+        None
+    }
+    
+    fn projection(&self) -> Option<&[String]> {
+        None
     }
 }
 
