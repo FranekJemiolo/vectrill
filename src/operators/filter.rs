@@ -3,8 +3,7 @@
 use std::sync::Arc;
 
 use crate::error::VectrillError;
-#[allow(unused_imports)]
-use crate::expression::{create_physical_expr, Expr, ExpressionError, PhysicalExpr};
+use crate::expression::{create_physical_expr, Expr, PhysicalExpr};
 use crate::operators::pipeline::Operator as PipelineOperator;
 use crate::RecordBatch;
 
@@ -115,7 +114,6 @@ mod tests {
     use arrow::datatypes::{DataType, Field, Schema};
 
     #[test]
-    #[ignore] // TODO: Fix filter operator implementation
     fn test_filter_operator() {
         // Create schema
         let schema = Arc::new(Schema::new(vec![

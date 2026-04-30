@@ -5,8 +5,7 @@ use std::collections::HashMap;
 use crate::error::VectrillError;
 use crate::expression::create_physical_expr;
 use crate::planner::logical::{AggFunction, AggSpec, LogicalPlan, WindowSpec, WindowType};
-#[allow(unused_imports)]
-use crate::planner::physical::{PhysicalAggregation, PhysicalPlan, SortKey};
+use crate::planner::physical::{PhysicalAggregation, PhysicalPlan};
 
 /// Compiler that converts logical plans to physical plans
 pub struct PlanCompiler {

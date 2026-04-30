@@ -2,16 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-#[allow(unused_imports)]
-use std::collections::HashMap;
-
-#[allow(unused_imports)]
-use crate::error::VectrillError;
-#[allow(unused_imports)]
-use crate::expression::{
-    map_python_bool_op, map_python_operator, map_python_unary_op, Expr, Operator, ScalarValue,
-    UnaryOp,
-};
+use crate::expression::{map_python_bool_op, map_python_operator, map_python_unary_op, Expr, Operator, ScalarValue};
 
 /// Python AST node representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -405,6 +396,12 @@ fn parse_binary_operation(expr_str: &str) -> Option<(PythonASTNode, String, Pyth
 
 /// Create a simple expression from a string (convenience function)
 pub fn expr_from_string(expr_str: &str) -> Expr {
+    // Try to parse simple expressions first
+    if let Some(expr) = parse_simple_expression_string(expr_str) {
+        return expr;
+    }
+
+    // Fall back to Python AST compilation
     let result = compile_python_expression(expr_str, None);
     if !result.errors.is_empty() {
         // Return a null expression if compilation failed
@@ -412,6 +409,101 @@ pub fn expr_from_string(expr_str: &str) -> Expr {
     } else {
         result.expr
     }
+}
+
+/// Parse simple expression strings for testing
+fn parse_simple_expression_string(expr_str: &str) -> Option<Expr> {
+    let trimmed = expr_str.trim();
+    
+    // Check for literals first (numbers, strings, booleans)
+    if let Some(literal) = parse_literal(trimmed) {
+        return Some(Expr::Literal(literal));
+    }
+    
+    // Check for binary operators
+    if let Some((left, op, right)) = parse_simple_binary_operation(trimmed) {
+        return Some(Expr::Binary {
+            left: Box::new(left),
+            op,
+            right: Box::new(right),
+        });
+    }
+    
+    // Check if it's a column name (alphanumeric with underscores)
+    if trimmed.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        return Some(Expr::Column(trimmed.to_string()));
+    }
+    
+    None
+}
+
+/// Parse binary operations from a string
+fn parse_simple_binary_operation(expr_str: &str) -> Option<(Expr, Operator, Expr)> {
+    let operators = vec!["==", "!=", "<=", ">=", "<", ">", "+", "-", "*", "/"];
+    
+    for op in &operators {
+        if let Some(pos) = expr_str.find(op) {
+            if pos > 0 && pos + op.len() < expr_str.len() {
+                let left_str = expr_str[..pos].trim();
+                let right_str = expr_str[pos + op.len()..].trim();
+                
+                if let Some(left) = parse_simple_expression_string(left_str) {
+                    if let Some(right) = parse_simple_expression_string(right_str) {
+                        return Some((left, map_operator(op), right));
+                    }
+                }
+            }
+        }
+    }
+    
+    None
+}
+
+/// Map operator string to Operator enum
+fn map_operator(op_str: &str) -> Operator {
+    match op_str {
+        "+" => Operator::Add,
+        "-" => Operator::Sub,
+        "*" => Operator::Mul,
+        "/" => Operator::Div,
+        "==" => Operator::Eq,
+        "!=" => Operator::NotEq,
+        "<" => Operator::Lt,
+        "<=" => Operator::LtEq,
+        ">" => Operator::Gt,
+        ">=" => Operator::GtEq,
+        _ => Operator::Add,
+    }
+}
+
+/// Parse literal values
+fn parse_literal(expr_str: &str) -> Option<ScalarValue> {
+    let trimmed = expr_str.trim();
+    
+    // String literal
+    if trimmed.starts_with('\'') && trimmed.ends_with('\'') {
+        return Some(ScalarValue::Utf8(trimmed[1..trimmed.len()-1].to_string()));
+    }
+    
+    // Boolean
+    if trimmed == "true" {
+        return Some(ScalarValue::Boolean(true));
+    }
+    if trimmed == "false" {
+        return Some(ScalarValue::Boolean(false));
+    }
+    
+    // Integer
+    if let Ok(i) = trimmed.parse::<i64>() {
+        return Some(ScalarValue::Int64(i));
+    }
+    
+    // Float
+    if let Ok(f) = trimmed.parse::<f64>() {
+        return Some(ScalarValue::Float64(f));
+    }
+    
+    None
 }
 
 #[cfg(test)]
@@ -434,14 +526,12 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO: Fix expr_from_string to parse simple expressions
     fn test_column_parsing() {
         let expr = expr_from_string("column_name");
         assert_eq!(expr, Expr::Column("column_name".to_string()));
     }
 
     #[test]
-    #[ignore] // TODO: Fix expr_from_string to parse simple expressions
     fn test_binary_operation_parsing() {
         let expr = expr_from_string("a + b");
         if let Expr::Binary { left, op, right } = expr {
@@ -454,7 +544,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO: Fix expr_from_string to parse simple expressions
     fn test_comparison_parsing() {
         let expr = expr_from_string("a > 10");
         if let Expr::Binary { left, op, right } = expr {

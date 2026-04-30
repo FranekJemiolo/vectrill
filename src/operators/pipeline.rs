@@ -1,6 +1,5 @@
 //! Pipeline implementation for chaining operators
 
-#[allow(unused_imports)]
 use crate::error::{Result, VectrillError};
 use crate::RecordBatch;
 

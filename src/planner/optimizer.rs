@@ -280,8 +280,11 @@ impl OptimizerRule for ProjectionEliminationRule {
                     } => {
                         // Combine projections
                         if columns == inner_columns {
-                            // Same projection, eliminate the outer one
-                            (**inner_input).clone()
+                            // Same projection, eliminate the inner one
+                            LogicalPlan::Project {
+                                input: inner_input.clone(),
+                                columns: columns.clone(),
+                            }
                         } else {
                             // Different projections, keep outer
                             LogicalPlan::Project {
@@ -466,7 +469,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO: Fix projection elimination rule
     fn test_projection_elimination() {
         let source = LogicalPlan::Source {
             name: "test".to_string(),

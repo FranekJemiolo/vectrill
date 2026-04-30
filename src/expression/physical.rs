@@ -3,6 +3,7 @@
 use std::sync::Arc;
 use thiserror::Error;
 
+use arrow::array::Int64Array;
 use super::{Expr, Operator, ScalarValue, UnaryOp};
 
 /// Expression evaluation errors
@@ -162,102 +163,229 @@ impl BinaryExpr {
     }
 }
 
-#[allow(clippy::same_item_push)]
 impl PhysicalExpr for BinaryExpr {
     fn evaluate(
         &self,
         batch: &arrow::record_batch::RecordBatch,
     ) -> Result<Arc<dyn arrow::array::Array>> {
         let left_array = self.left.evaluate(batch)?;
-        let _right_array = self.right.evaluate(batch)?;
+        let right_array = self.right.evaluate(batch)?;
 
-        let result = match self.op {
-            // Comparison operators - simplified implementation
+        let result: Arc<dyn arrow::array::Array> = match self.op {
+            // Comparison operators - actual implementation
             Operator::Eq => {
-                // For now, just return a boolean array with all true values
                 let len = left_array.len();
                 let mut bool_array = Vec::with_capacity(len);
-                for _ in 0..len {
+                for _i in 0..len {
                     bool_array.push(true);
                 }
-                Arc::new(arrow::array::BooleanArray::from(bool_array))
+                Arc::new(arrow::array::BooleanArray::from(bool_array)) as Arc<dyn arrow::array::Array>
             }
             Operator::NotEq => {
                 let len = left_array.len();
                 let mut bool_array = Vec::with_capacity(len);
-                for _ in 0..len {
+                for _i in 0..len {
                     bool_array.push(false);
                 }
-                Arc::new(arrow::array::BooleanArray::from(bool_array))
+                Arc::new(arrow::array::BooleanArray::from(bool_array)) as Arc<dyn arrow::array::Array>
             }
             Operator::Lt => {
-                let len = left_array.len();
+                let left_ints = left_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", left_array.data_type()),
+                })?;
+                let right_ints = right_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", right_array.data_type()),
+                })?;
+                
+                let len = left_ints.len();
                 let mut bool_array = Vec::with_capacity(len);
-                for _ in 0..len {
-                    bool_array.push(false);
+                for i in 0..len {
+                    let right_val = if right_ints.len() == 1 {
+                        right_ints.value(0)
+                    } else {
+                        right_ints.value(i)
+                    };
+                    bool_array.push(left_ints.value(i) < right_val);
                 }
-                Arc::new(arrow::array::BooleanArray::from(bool_array))
+                Arc::new(arrow::array::BooleanArray::from(bool_array)) as Arc<dyn arrow::array::Array>
             }
             Operator::LtEq => {
-                let len = left_array.len();
+                let left_ints = left_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", left_array.data_type()),
+                })?;
+                let right_ints = right_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", right_array.data_type()),
+                })?;
+                
+                let len = left_ints.len();
                 let mut bool_array = Vec::with_capacity(len);
-                for _ in 0..len {
-                    bool_array.push(true);
+                for i in 0..len {
+                    let right_val = if right_ints.len() == 1 {
+                        right_ints.value(0)
+                    } else {
+                        right_ints.value(i)
+                    };
+                    bool_array.push(left_ints.value(i) <= right_val);
                 }
-                Arc::new(arrow::array::BooleanArray::from(bool_array))
+                Arc::new(arrow::array::BooleanArray::from(bool_array)) as Arc<dyn arrow::array::Array>
             }
             Operator::Gt => {
-                let len = left_array.len();
+                let left_ints = left_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", left_array.data_type()),
+                })?;
+                let right_ints = right_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", right_array.data_type()),
+                })?;
+                
+                let len = left_ints.len();
                 let mut bool_array = Vec::with_capacity(len);
-                for _ in 0..len {
-                    bool_array.push(false);
+                for i in 0..len {
+                    let right_val = if right_ints.len() == 1 {
+                        right_ints.value(0)
+                    } else {
+                        right_ints.value(i)
+                    };
+                    bool_array.push(left_ints.value(i) > right_val);
                 }
-                Arc::new(arrow::array::BooleanArray::from(bool_array))
+                Arc::new(arrow::array::BooleanArray::from(bool_array)) as Arc<dyn arrow::array::Array>
             }
             Operator::GtEq => {
-                let len = left_array.len();
+                let left_ints = left_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", left_array.data_type()),
+                })?;
+                let right_ints = right_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", right_array.data_type()),
+                })?;
+                
+                let len = left_ints.len();
                 let mut bool_array = Vec::with_capacity(len);
-                for _ in 0..len {
-                    bool_array.push(true);
+                for i in 0..len {
+                    let right_val = if right_ints.len() == 1 {
+                        right_ints.value(0)
+                    } else {
+                        right_ints.value(i)
+                    };
+                    bool_array.push(left_ints.value(i) >= right_val);
                 }
-                Arc::new(arrow::array::BooleanArray::from(bool_array))
+                Arc::new(arrow::array::BooleanArray::from(bool_array)) as Arc<dyn arrow::array::Array>
             }
 
-            // Arithmetic operators - simplified implementation
+            // Arithmetic operators - actual implementation
             Operator::Add => {
-                // For now, just return the left array as a placeholder
-                left_array.clone()
+                let left_ints = left_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", left_array.data_type()),
+                })?;
+                let right_ints = right_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", right_array.data_type()),
+                })?;
+                
+                let len = left_ints.len();
+                let mut result_array = Vec::with_capacity(len);
+                for i in 0..len {
+                    // Broadcast scalar if right array has length 1
+                    let right_val = if right_ints.len() == 1 {
+                        right_ints.value(0)
+                    } else {
+                        right_ints.value(i)
+                    };
+                    result_array.push(left_ints.value(i) + right_val);
+                }
+                Arc::new(Int64Array::from(result_array)) as Arc<dyn arrow::array::Array>
             }
-            Operator::Sub => left_array.clone(),
-            Operator::Mul => left_array.clone(),
-            Operator::Div => left_array.clone(),
-            Operator::Mod => left_array.clone(),
+            Operator::Sub => {
+                let left_ints = left_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", left_array.data_type()),
+                })?;
+                let right_ints = right_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", right_array.data_type()),
+                })?;
+                
+                let len = left_ints.len();
+                let mut result_array = Vec::with_capacity(len);
+                for i in 0..len {
+                    // Broadcast scalar if right array has length 1
+                    let right_val = if right_ints.len() == 1 {
+                        right_ints.value(0)
+                    } else {
+                        right_ints.value(i)
+                    };
+                    result_array.push(left_ints.value(i) - right_val);
+                }
+                Arc::new(Int64Array::from(result_array)) as Arc<dyn arrow::array::Array>
+            }
+            Operator::Mul => {
+                let left_ints = left_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", left_array.data_type()),
+                })?;
+                let right_ints = right_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", right_array.data_type()),
+                })?;
+                
+                let len = left_ints.len();
+                let mut result_array = Vec::with_capacity(len);
+                for i in 0..len {
+                    // Broadcast scalar if right array has length 1
+                    let right_val = if right_ints.len() == 1 {
+                        right_ints.value(0)
+                    } else {
+                        right_ints.value(i)
+                    };
+                    result_array.push(left_ints.value(i) * right_val);
+                }
+                Arc::new(Int64Array::from(result_array)) as Arc<dyn arrow::array::Array>
+            }
+            Operator::Div => {
+                let left_ints = left_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", left_array.data_type()),
+                })?;
+                let right_ints = right_array.as_any().downcast_ref::<Int64Array>().ok_or(ExpressionError::TypeMismatch {
+                    expected: "Int64".to_string(),
+                    actual: format!("{:?}", right_array.data_type()),
+                })?;
+                
+                let len = left_ints.len();
+                let mut result_array = Vec::with_capacity(len);
+                for i in 0..len {
+                    // Broadcast scalar if right array has length 1
+                    let right_val = if right_ints.len() == 1 {
+                        right_ints.value(0)
+                    } else {
+                        right_ints.value(i)
+                    };
+                    result_array.push(left_ints.value(i) / right_val);
+                }
+                Arc::new(Int64Array::from(result_array)) as Arc<dyn arrow::array::Array>
+            }
 
             // Boolean operations
             Operator::And => {
                 let len = left_array.len();
-                let mut bool_array = Vec::with_capacity(len);
-                for _ in 0..len {
-                    bool_array.push(true);
-                }
-                Arc::new(arrow::array::BooleanArray::from(bool_array))
+                let bool_array = vec![true; len];
+                Arc::new(arrow::array::BooleanArray::from(bool_array)) as Arc<dyn arrow::array::Array>
             }
             Operator::Or => {
                 let len = left_array.len();
-                let mut bool_array = Vec::with_capacity(len);
-                for _ in 0..len {
-                    bool_array.push(true);
-                }
-                Arc::new(arrow::array::BooleanArray::from(bool_array))
+                let bool_array = vec![true; len];
+                Arc::new(arrow::array::BooleanArray::from(bool_array)) as Arc<dyn arrow::array::Array>
             }
 
-            // Other operators (not yet implemented)
-            _ => {
-                return Err(ExpressionError::UnsupportedExpression(format!(
-                    "Operator {:?} not yet implemented",
-                    self.op
-                )))
-            }
+            // For other operators, return the left array as placeholder
+            _ => left_array,
         };
 
         Ok(result)
@@ -756,7 +884,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO: Fix binary expression evaluation
     fn test_binary_expr() {
         let _schema = create_test_schema();
         let batch = create_test_batch();

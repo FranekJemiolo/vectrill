@@ -3,10 +3,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-#[allow(unused_imports)]
-use crate::expression::{create_physical_expr, LiteralExpr, PhysicalExpr};
-#[allow(unused_imports)]
-use crate::planner::logical::{AggFunction, LogicalPlan, WindowSpec, WindowType};
+use crate::expression::PhysicalExpr;
+use crate::planner::logical::{AggFunction, WindowSpec, WindowType};
 
 /// Physical plan representation
 #[derive(Debug, Clone)]

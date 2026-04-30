@@ -5,13 +5,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use crate::error::VectrillError;
-#[allow(unused_imports)]
-use crate::expression::{create_physical_expr, PhysicalExpr};
+use crate::operators::{FilterOperator, MapOperator};
 use crate::operators::pipeline::{Operator as PipelineOperator, Pipeline};
-#[allow(unused_imports)]
-use crate::operators::{FilterOperator, MapOperator, ProjectionOperator};
-#[allow(unused_imports)]
-use crate::planner::physical::{PhysicalAggregation, PhysicalPlan, SortKey};
+use crate::planner::physical::PhysicalPlan;
 use crate::RecordBatch;
 
 /// Unique node identifier
@@ -330,24 +326,17 @@ impl ExecutionGraph {
     }
 
     /// Check that all nodes have valid plans
-    #[allow(clippy::collapsible_match)]
     fn check_node_plans(&self) -> Result<(), VectrillError> {
         for (node_id, node) in &self.nodes {
-            match &node.plan {
-                PhysicalPlan::ScanSource { name, attrs: _ } => {
-                    if name.is_empty() {
-                        return Err(VectrillError::InvalidExpression(format!(
-                            "Node {} has empty source name",
-                            node_id
-                        )));
-                    }
-                }
-                _ => {
-                    // Other plan types are generally valid
+            if let PhysicalPlan::ScanSource { name, attrs: _ } = &node.plan {
+                if name.is_empty() {
+                    return Err(VectrillError::InvalidExpression(format!(
+                        "Node {} has empty source name",
+                        node_id
+                    )));
                 }
             }
         }
-
         Ok(())
     }
 

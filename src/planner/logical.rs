@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::error::VectrillError;
-use crate::expression::{Expr, ExprType};
+use crate::expression::Expr;
 
 /// Window specification for windowed operations
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -238,8 +238,8 @@ impl LogicalPlan {
                     "{}Filter:\n{}\n{}Expr: {}",
                     spaces,
                     input.to_string(indent + 1),
-                    spaces,
-                    expr.to_string()
+                    "  ".repeat(indent + 1),
+                    expr.as_string()
                 )
             }
             LogicalPlan::Map { input, expr } => {
@@ -248,7 +248,7 @@ impl LogicalPlan {
                     spaces,
                     input.to_string(indent + 1),
                     spaces,
-                    expr.to_string()
+                    expr.as_string()
                 )
             }
             LogicalPlan::GroupBy { input, keys } => {
@@ -287,41 +287,12 @@ impl LogicalPlan {
     }
 }
 
-/// Map expression type to Arrow data type
-#[allow(dead_code)]
-fn map_expr_type_to_arrow(
-    expr_type: &ExprType,
-) -> Result<arrow::datatypes::DataType, VectrillError> {
-    match expr_type {
-        ExprType::Null => Ok(arrow::datatypes::DataType::Null),
-        ExprType::Boolean => Ok(arrow::datatypes::DataType::Boolean),
-        ExprType::Int8 => Ok(arrow::datatypes::DataType::Int8),
-        ExprType::Int16 => Ok(arrow::datatypes::DataType::Int16),
-        ExprType::Int32 => Ok(arrow::datatypes::DataType::Int32),
-        ExprType::Int64 => Ok(arrow::datatypes::DataType::Int64),
-        ExprType::UInt8 => Ok(arrow::datatypes::DataType::UInt8),
-        ExprType::UInt16 => Ok(arrow::datatypes::DataType::UInt16),
-        ExprType::UInt32 => Ok(arrow::datatypes::DataType::UInt32),
-        ExprType::UInt64 => Ok(arrow::datatypes::DataType::UInt64),
-        ExprType::Float32 => Ok(arrow::datatypes::DataType::Float32),
-        ExprType::Float64 => Ok(arrow::datatypes::DataType::Float64),
-        ExprType::Utf8 => Ok(arrow::datatypes::DataType::Utf8),
-        ExprType::Timestamp => Ok(arrow::datatypes::DataType::Timestamp(
-            arrow::datatypes::TimeUnit::Microsecond,
-            None,
-        )),
-        ExprType::Date => Ok(arrow::datatypes::DataType::Date32),
-        ExprType::Unknown => Ok(arrow::datatypes::DataType::Null),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::expression::{Expr, Operator, ScalarValue};
 
     #[test]
-    #[ignore] // TODO: Fix logical plan to_string formatting
     fn test_logical_plan_creation() {
         let source = LogicalPlan::Source {
             name: "test".to_string(),

@@ -74,11 +74,7 @@ impl Expr {
     }
 
     /// Get a string representation of the expression
-    #[allow(
-        clippy::inherent_to_string_shadow_display,
-        clippy::to_string_in_format_args
-    )]
-    pub fn to_string(&self) -> String {
+    pub fn as_string(&self) -> String {
         match self {
             Expr::Column(name) => name.clone(),
             Expr::Literal(value) => value.to_string(),
@@ -105,7 +101,7 @@ impl Expr {
 
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", self.as_string())
     }
 }
 
@@ -203,16 +199,16 @@ mod tests {
     #[test]
     fn test_expr_creation() {
         let col = Expr::column("test");
-        assert_eq!(col.to_string(), "test");
+        assert_eq!(col.as_string(), "test");
 
         let lit = Expr::literal(42i64);
-        assert_eq!(lit.to_string(), "42");
+        assert_eq!(lit.as_string(), "42");
 
         let binary = Expr::binary(Expr::column("a"), Operator::Add, Expr::column("b"));
-        assert_eq!(binary.to_string(), "(a + b)");
+        assert_eq!(binary.as_string(), "(a + b)");
 
         let unary = Expr::unary(UnaryOp::Not, Expr::column("flag"));
-        assert_eq!(unary.to_string(), "!flag");
+        assert_eq!(unary.as_string(), "!flag");
     }
 
     #[test]
