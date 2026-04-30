@@ -1,5 +1,6 @@
 //! Pipeline implementation for chaining operators
 
+#[allow(unused_imports)]
 use crate::error::{Result, VectrillError};
 use crate::RecordBatch;
 
@@ -36,23 +37,23 @@ impl Pipeline {
     /// Process a batch through all operators in the pipeline
     pub fn process(&mut self, batch: RecordBatch) -> Result<RecordBatch> {
         let mut current_batch = batch;
-        
+
         for operator in &mut self.operators {
             current_batch = operator.process(current_batch)?;
         }
-        
+
         Ok(current_batch)
     }
 
     /// Flush all operators in the pipeline
     pub fn flush(&mut self) -> Result<Vec<RecordBatch>> {
         let mut all_batches = Vec::new();
-        
+
         for operator in &mut self.operators {
             let batches = operator.flush()?;
             all_batches.extend(batches);
         }
-        
+
         Ok(all_batches)
     }
 
@@ -127,11 +128,7 @@ mod tests {
                 })?;
 
             // Create new array with added values
-            let new_values: Vec<i64> = int_array
-                .values()
-                .iter()
-                .map(|&x| x + self.value)
-                .collect();
+            let new_values: Vec<i64> = int_array.values().iter().map(|&x| x + self.value).collect();
             let new_array = Arc::new(Int64Array::from(new_values));
 
             // Create new batch with modified column
@@ -154,8 +151,7 @@ mod tests {
 
     #[test]
     fn test_pipeline_single_operator() {
-        let mut pipeline = Pipeline::new()
-            .add_operator(Box::new(PassThroughOperator));
+        let mut pipeline = Pipeline::new().add_operator(Box::new(PassThroughOperator));
 
         assert_eq!(pipeline.len(), 1);
         assert!(!pipeline.is_empty());
@@ -185,11 +181,12 @@ mod tests {
                 Arc::new(Int64Array::from(vec![1, 2, 3])),
                 Arc::new(StringArray::from(vec!["Alice", "Bob", "Charlie"])),
             ],
-        ).unwrap();
+        )
+        .unwrap();
 
         // Create pipeline with add constant operator
-        let mut pipeline = Pipeline::new()
-            .add_operator(Box::new(AddConstantOperator::new("id", 10)));
+        let mut pipeline =
+            Pipeline::new().add_operator(Box::new(AddConstantOperator::new("id", 10)));
 
         // Process batch
         let result = pipeline.process(batch).unwrap();
@@ -198,7 +195,11 @@ mod tests {
         assert_eq!(result.num_rows(), 3);
         assert_eq!(result.num_columns(), 2);
 
-        let id_array = result.column(0).as_any().downcast_ref::<Int64Array>().unwrap();
+        let id_array = result
+            .column(0)
+            .as_any()
+            .downcast_ref::<Int64Array>()
+            .unwrap();
         assert_eq!(id_array.value(0), 11); // 1 + 10
         assert_eq!(id_array.value(1), 12); // 2 + 10
         assert_eq!(id_array.value(2), 13); // 3 + 10

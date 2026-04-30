@@ -1,13 +1,13 @@
 //! Logical Plan Optimizer
 
-use crate::planner::logical::{LogicalPlan, WindowSpec, WindowType, AggSpec, AggFunction};
 use crate::expression::{Expr, Operator};
+use crate::planner::logical::LogicalPlan;
 
 /// Optimizer rule trait
 pub trait OptimizerRule: Send + Sync {
     /// Apply the rule to a logical plan
     fn apply(&self, plan: &LogicalPlan) -> LogicalPlan;
-    
+
     /// Get the name of this rule
     fn name(&self) -> &'static str;
 }
@@ -26,24 +26,24 @@ impl Optimizer {
             Box::new(ColumnPruningRule),
             Box::new(ProjectionEliminationRule),
         ];
-        
+
         Self { rules }
     }
-    
+
     /// Add a custom rule to the optimizer
     pub fn add_rule(mut self, rule: Box<dyn OptimizerRule>) -> Self {
         self.rules.push(rule);
         self
     }
-    
+
     /// Optimize a logical plan using all rules
     pub fn optimize(&self, plan: &LogicalPlan) -> LogicalPlan {
         let mut current_plan = plan.clone();
-        
+
         for rule in &self.rules {
             current_plan = rule.apply(&current_plan);
         }
-        
+
         current_plan
     }
 }
@@ -63,31 +63,34 @@ impl OptimizerRule for FilterPushdownRule {
             LogicalPlan::Filter { input, expr } => {
                 // Try to push filter through input
                 let optimized_input = self.apply(input);
-                
+
                 match optimized_input {
-                    LogicalPlan::Filter { input: inner_input, expr: inner_expr } => {
+                    LogicalPlan::Filter {
+                        input: inner_input,
+                        expr: inner_expr,
+                    } => {
                         // Combine filters: filter AND filter
-                        let combined_expr = Expr::binary(
-                            inner_expr.clone(),
-                            Operator::And,
-                            expr.clone(),
-                        );
-                        
+                        let combined_expr =
+                            Expr::binary(inner_expr.clone(), Operator::And, expr.clone());
+
                         LogicalPlan::Filter {
                             input: inner_input.clone(),
                             expr: combined_expr,
                         }
                     }
-                    
-                    LogicalPlan::Map { input: ref map_input, expr: ref map_expr } => {
+
+                    LogicalPlan::Map {
+                        input: ref map_input,
+                        expr: ref map_expr,
+                    } => {
                         // Check if filter can be pushed through map
-                        if can_push_filter_through_map(expr, &map_expr) {
+                        if can_push_filter_through_map(expr, map_expr) {
                             // Push filter below map
                             let pushed_filter = LogicalPlan::Filter {
                                 input: map_input.clone(),
                                 expr: expr.clone(),
                             };
-                            
+
                             LogicalPlan::Map {
                                 input: Box::new(pushed_filter),
                                 expr: map_expr.clone(),
@@ -100,7 +103,7 @@ impl OptimizerRule for FilterPushdownRule {
                             }
                         }
                     }
-                    
+
                     _ => {
                         // Can't push filter further
                         LogicalPlan::Filter {
@@ -110,7 +113,7 @@ impl OptimizerRule for FilterPushdownRule {
                     }
                 }
             }
-            
+
             LogicalPlan::Map { input, expr } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::Map {
@@ -118,7 +121,7 @@ impl OptimizerRule for FilterPushdownRule {
                     expr: expr.clone(),
                 }
             }
-            
+
             LogicalPlan::GroupBy { input, keys } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::GroupBy {
@@ -126,7 +129,7 @@ impl OptimizerRule for FilterPushdownRule {
                     keys: keys.clone(),
                 }
             }
-            
+
             LogicalPlan::Window { input, spec } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::Window {
@@ -134,7 +137,7 @@ impl OptimizerRule for FilterPushdownRule {
                     spec: spec.clone(),
                 }
             }
-            
+
             LogicalPlan::Aggregate { input, spec } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::Aggregate {
@@ -142,7 +145,7 @@ impl OptimizerRule for FilterPushdownRule {
                     spec: spec.clone(),
                 }
             }
-            
+
             LogicalPlan::Project { input, columns } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::Project {
@@ -150,16 +153,14 @@ impl OptimizerRule for FilterPushdownRule {
                     columns: columns.clone(),
                 }
             }
-            
-            LogicalPlan::Source { name, attrs } => {
-                LogicalPlan::Source {
-                    name: name.clone(),
-                    attrs: attrs.clone(),
-                }
-            }
+
+            LogicalPlan::Source { name, attrs } => LogicalPlan::Source {
+                name: name.clone(),
+                attrs: attrs.clone(),
+            },
         }
     }
-    
+
     fn name(&self) -> &'static str {
         "FilterPushdown"
     }
@@ -173,9 +174,12 @@ impl OptimizerRule for MapFusionRule {
         match plan {
             LogicalPlan::Map { input, expr } => {
                 let optimized_input = self.apply(input);
-                
+
                 match optimized_input {
-                    LogicalPlan::Map { input: inner_input, expr: inner_expr } => {
+                    LogicalPlan::Map {
+                        input: inner_input,
+                        expr: _inner_expr,
+                    } => {
                         // Fuse maps: combine expressions
                         // For now, just keep the outer map
                         // In a real implementation, we'd combine the expressions
@@ -184,16 +188,14 @@ impl OptimizerRule for MapFusionRule {
                             expr: expr.clone(),
                         }
                     }
-                    
-                    _ => {
-                        LogicalPlan::Map {
-                            input: Box::new(optimized_input),
-                            expr: expr.clone(),
-                        }
-                    }
+
+                    _ => LogicalPlan::Map {
+                        input: Box::new(optimized_input),
+                        expr: expr.clone(),
+                    },
                 }
             }
-            
+
             LogicalPlan::Filter { input, expr } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::Filter {
@@ -201,7 +203,7 @@ impl OptimizerRule for MapFusionRule {
                     expr: expr.clone(),
                 }
             }
-            
+
             LogicalPlan::GroupBy { input, keys } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::GroupBy {
@@ -209,7 +211,7 @@ impl OptimizerRule for MapFusionRule {
                     keys: keys.clone(),
                 }
             }
-            
+
             LogicalPlan::Window { input, spec } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::Window {
@@ -217,7 +219,7 @@ impl OptimizerRule for MapFusionRule {
                     spec: spec.clone(),
                 }
             }
-            
+
             LogicalPlan::Aggregate { input, spec } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::Aggregate {
@@ -225,7 +227,7 @@ impl OptimizerRule for MapFusionRule {
                     spec: spec.clone(),
                 }
             }
-            
+
             LogicalPlan::Project { input, columns } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::Project {
@@ -233,16 +235,14 @@ impl OptimizerRule for MapFusionRule {
                     columns: columns.clone(),
                 }
             }
-            
-            LogicalPlan::Source { name, attrs } => {
-                LogicalPlan::Source {
-                    name: name.clone(),
-                    attrs: attrs.clone(),
-                }
-            }
+
+            LogicalPlan::Source { name, attrs } => LogicalPlan::Source {
+                name: name.clone(),
+                attrs: attrs.clone(),
+            },
         }
     }
-    
+
     fn name(&self) -> &'static str {
         "MapFusion"
     }
@@ -258,7 +258,7 @@ impl OptimizerRule for ColumnPruningRule {
         // and add projections to prune unused columns
         plan.clone()
     }
-    
+
     fn name(&self) -> &'static str {
         "ColumnPruning"
     }
@@ -272,9 +272,12 @@ impl OptimizerRule for ProjectionEliminationRule {
         match plan {
             LogicalPlan::Project { input, columns } => {
                 let optimized_input = self.apply(input);
-                
+
                 match optimized_input {
-                    LogicalPlan::Project { input: ref inner_input, columns: ref inner_columns } => {
+                    LogicalPlan::Project {
+                        input: ref inner_input,
+                        columns: ref inner_columns,
+                    } => {
                         // Combine projections
                         if columns == inner_columns {
                             // Same projection, eliminate the outer one
@@ -287,16 +290,14 @@ impl OptimizerRule for ProjectionEliminationRule {
                             }
                         }
                     }
-                    
-                    _ => {
-                        LogicalPlan::Project {
-                            input: Box::new(optimized_input),
-                            columns: columns.clone(),
-                        }
-                    }
+
+                    _ => LogicalPlan::Project {
+                        input: Box::new(optimized_input),
+                        columns: columns.clone(),
+                    },
                 }
             }
-            
+
             LogicalPlan::Filter { input, expr } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::Filter {
@@ -304,7 +305,7 @@ impl OptimizerRule for ProjectionEliminationRule {
                     expr: expr.clone(),
                 }
             }
-            
+
             LogicalPlan::Map { input, expr } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::Map {
@@ -312,7 +313,7 @@ impl OptimizerRule for ProjectionEliminationRule {
                     expr: expr.clone(),
                 }
             }
-            
+
             LogicalPlan::GroupBy { input, keys } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::GroupBy {
@@ -320,7 +321,7 @@ impl OptimizerRule for ProjectionEliminationRule {
                     keys: keys.clone(),
                 }
             }
-            
+
             LogicalPlan::Window { input, spec } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::Window {
@@ -328,7 +329,7 @@ impl OptimizerRule for ProjectionEliminationRule {
                     spec: spec.clone(),
                 }
             }
-            
+
             LogicalPlan::Aggregate { input, spec } => {
                 let optimized_input = self.apply(input);
                 LogicalPlan::Aggregate {
@@ -336,16 +337,14 @@ impl OptimizerRule for ProjectionEliminationRule {
                     spec: spec.clone(),
                 }
             }
-            
-            LogicalPlan::Source { name, attrs } => {
-                LogicalPlan::Source {
-                    name: name.clone(),
-                    attrs: attrs.clone(),
-                }
-            }
+
+            LogicalPlan::Source { name, attrs } => LogicalPlan::Source {
+                name: name.clone(),
+                attrs: attrs.clone(),
+            },
         }
     }
-    
+
     fn name(&self) -> &'static str {
         "ProjectionElimination"
     }
@@ -360,32 +359,27 @@ fn can_push_filter_through_map(filter_expr: &Expr, map_expr: &Expr) -> bool {
             !modifies_column(map_expr, name)
         }
         Expr::Binary { left, op: _, right } => {
-            can_push_filter_through_map(left, map_expr) && can_push_filter_through_map(right, map_expr)
+            can_push_filter_through_map(left, map_expr)
+                && can_push_filter_through_map(right, map_expr)
         }
-        Expr::Unary { op: _, expr } => {
-            can_push_filter_through_map(expr, map_expr)
-        }
+        Expr::Unary { op: _, expr } => can_push_filter_through_map(expr, map_expr),
         _ => false,
     }
 }
 
 /// Check if a map expression modifies a specific column
-fn modifies_column(map_expr: &Expr, column_name: &str) -> bool {
+fn modifies_column(map_expr: &Expr, _column_name: &str) -> bool {
     // Simplified check - in a real implementation, this would analyze the expression
     match map_expr {
         Expr::Binary { left, op: _, right } => {
-            modifies_column(left, column_name) || modifies_column(right, column_name)
+            modifies_column(left, _column_name) || modifies_column(right, _column_name)
         }
-        Expr::Unary { op: _, expr } => {
-            modifies_column(expr, column_name)
-        }
-        Expr::Function { name: _, args } => {
+        Expr::Unary { op: _, expr } => modifies_column(expr, _column_name),
+        Expr::Function { name: _, args: _ } => {
             // Functions typically create new columns, so they don't modify existing ones
             false
-        },
-        Expr::Cast { expr, data_type: _ } => {
-            modifies_column(expr, column_name)
         }
+        Expr::Cast { expr, data_type: _ } => modifies_column(expr, _column_name),
         _ => false,
     }
 }
@@ -400,27 +394,27 @@ mod tests {
         let optimizer = Optimizer::new();
         assert_eq!(optimizer.rules.len(), 4);
     }
-    
+
     #[test]
     fn test_filter_pushdown() {
         let source = LogicalPlan::Source {
             name: "test".to_string(),
             attrs: HashMap::new(),
         };
-        
+
         let filter1 = LogicalPlan::Filter {
             input: Box::new(source),
             expr: Expr::column("id"),
         };
-        
+
         let filter2 = LogicalPlan::Filter {
             input: Box::new(filter1),
             expr: Expr::column("active"),
         };
-        
+
         let rule = FilterPushdownRule;
         let result = rule.apply(&filter2);
-        
+
         // Should combine filters
         match result {
             LogicalPlan::Filter { input, expr } => {
@@ -435,27 +429,27 @@ mod tests {
             _ => panic!("Expected filter node"),
         }
     }
-    
+
     #[test]
     fn test_map_fusion() {
         let source = LogicalPlan::Source {
             name: "test".to_string(),
             attrs: HashMap::new(),
         };
-        
+
         let map1 = LogicalPlan::Map {
             input: Box::new(source),
             expr: Expr::column("a"),
         };
-        
+
         let map2 = LogicalPlan::Map {
             input: Box::new(map1),
             expr: Expr::column("b"),
         };
-        
+
         let rule = MapFusionRule;
         let result = rule.apply(&map2);
-        
+
         // Should fuse maps
         match result {
             LogicalPlan::Map { input, expr } => {
@@ -470,27 +464,27 @@ mod tests {
             _ => panic!("Expected map node"),
         }
     }
-    
+
     #[test]
     fn test_projection_elimination() {
         let source = LogicalPlan::Source {
             name: "test".to_string(),
             attrs: HashMap::new(),
         };
-        
+
         let proj1 = LogicalPlan::Project {
             input: Box::new(source),
             columns: vec!["id".to_string(), "name".to_string()],
         };
-        
+
         let proj2 = LogicalPlan::Project {
             input: Box::new(proj1),
             columns: vec!["id".to_string(), "name".to_string()],
         };
-        
+
         let rule = ProjectionEliminationRule;
         let result = rule.apply(&proj2);
-        
+
         // Should eliminate duplicate projection
         match result {
             LogicalPlan::Project { input, columns } => {

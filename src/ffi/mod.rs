@@ -19,9 +19,9 @@ pub use sequencer::*;
 fn _rust(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Add sequencer class
     m.add_class::<PySequencer>()?;
-    
+
     // Add module version
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
-    
+
     Ok(())
 }

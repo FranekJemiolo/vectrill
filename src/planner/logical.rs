@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::expression::{Expr, ExprType, ScalarValue};
 use crate::error::VectrillError;
+use crate::expression::{Expr, ExprType};
 
 /// Window specification for windowed operations
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -50,37 +50,31 @@ pub enum LogicalPlan {
         name: String,
         attrs: HashMap<String, String>,
     },
-    
+
     /// Filter node - filters records based on predicate
-    Filter {
-        input: Box<LogicalPlan>,
-        expr: Expr,
-    },
-    
+    Filter { input: Box<LogicalPlan>, expr: Expr },
+
     /// Map node - transforms records using expressions
-    Map {
-        input: Box<LogicalPlan>,
-        expr: Expr,
-    },
-    
+    Map { input: Box<LogicalPlan>, expr: Expr },
+
     /// GroupBy node - groups records by key
     GroupBy {
         input: Box<LogicalPlan>,
         keys: Vec<String>,
     },
-    
+
     /// Window node - applies window specification
     Window {
         input: Box<LogicalPlan>,
         spec: WindowSpec,
     },
-    
+
     /// Aggregate node - applies aggregations
     Aggregate {
         input: Box<LogicalPlan>,
         spec: AggSpec,
     },
-    
+
     /// Project node - selects columns
     Project {
         input: Box<LogicalPlan>,
@@ -92,7 +86,7 @@ impl LogicalPlan {
     /// Get the schema for this plan node
     pub fn schema(&self) -> Result<arrow::datatypes::SchemaRef, VectrillError> {
         match self {
-            LogicalPlan::Source { name: _, attrs } => {
+            LogicalPlan::Source { name: _, attrs: _ } => {
                 // For now, return a simple schema
                 // In a real implementation, this would infer schema from source
                 let schema = arrow::datatypes::Schema::new(vec![
@@ -101,51 +95,53 @@ impl LogicalPlan {
                 ]);
                 Ok(Arc::new(schema))
             }
-            
+
             LogicalPlan::Filter { input, expr: _ } => {
                 // Filter doesn't change schema
                 input.schema()
             }
-            
-            LogicalPlan::Map { input, expr } => {
+
+            LogicalPlan::Map { input, expr: _ } => {
                 // Map can add new columns based on expressions
                 let input_schema = input.schema()?;
                 let mut fields = input_schema.fields().to_vec();
-                
+
                 // Add field for map expression result
                 let data_type = arrow::datatypes::DataType::Utf8; // Simplified for now
-                fields.push(Arc::new(arrow::datatypes::Field::new("computed", data_type, true)));
-                
+                fields.push(Arc::new(arrow::datatypes::Field::new(
+                    "computed", data_type, true,
+                )));
+
                 let schema = arrow::datatypes::Schema::new(fields);
                 Ok(Arc::new(schema))
             }
-            
+
             LogicalPlan::GroupBy { input, keys } => {
                 // GroupBy adds grouping keys
                 let input_schema = input.schema()?;
                 let mut fields = Vec::new();
-                
+
                 // Add key fields
                 for key in keys {
-                    if let Some(field) = input_schema.field_with_name(key).ok() {
+                    if let Ok(field) = input_schema.field_with_name(key) {
                         fields.push(field.clone());
                     }
                 }
-                
+
                 let schema = arrow::datatypes::Schema::new(fields);
                 Ok(Arc::new(schema))
             }
-            
+
             LogicalPlan::Window { input, spec: _ } => {
                 // Window doesn't change schema immediately
                 input.schema()
             }
-            
+
             LogicalPlan::Aggregate { input, spec } => {
                 // Aggregate changes schema based on aggregations
-                let input_schema = input.schema()?;
+                let _input_schema = input.schema()?;
                 let mut fields = Vec::new();
-                
+
                 // Add aggregation result fields
                 for (col_name, agg_fn) in &spec.aggregations {
                     let data_type = match agg_fn {
@@ -156,28 +152,28 @@ impl LogicalPlan {
                     };
                     fields.push(arrow::datatypes::Field::new(col_name, data_type, true));
                 }
-                
+
                 let schema = arrow::datatypes::Schema::new(fields);
                 Ok(Arc::new(schema))
             }
-            
+
             LogicalPlan::Project { input, columns } => {
                 // Project selects specific columns
                 let input_schema = input.schema()?;
                 let mut fields = Vec::new();
-                
+
                 for col_name in columns {
-                    if let Some(field) = input_schema.field_with_name(col_name).ok() {
+                    if let Ok(field) = input_schema.field_with_name(col_name) {
                         fields.push(field.clone());
                     }
                 }
-                
+
                 let schema = arrow::datatypes::Schema::new(fields);
                 Ok(Arc::new(schema))
             }
         }
     }
-    
+
     /// Get all children of this plan node
     pub fn children(&self) -> Vec<&LogicalPlan> {
         match self {
@@ -190,60 +186,46 @@ impl LogicalPlan {
             LogicalPlan::Project { input, .. } => vec![input.as_ref()],
         }
     }
-    
+
     /// Transform this plan node with a function
-    pub fn transform<F>(&self, f: F) -> LogicalPlan 
-    where 
+    pub fn transform<F>(&self, f: F) -> LogicalPlan
+    where
         F: Fn(&LogicalPlan) -> LogicalPlan + Clone,
     {
         let transformed = match self {
-            LogicalPlan::Source { name, attrs } => {
-                LogicalPlan::Source {
-                    name: name.clone(),
-                    attrs: attrs.clone(),
-                }
-            }
-            LogicalPlan::Filter { input, expr } => {
-                LogicalPlan::Filter {
-                    input: Box::new(input.transform(f.clone())),
-                    expr: expr.clone(),
-                }
-            }
-            LogicalPlan::Map { input, expr } => {
-                LogicalPlan::Map {
-                    input: Box::new(input.transform(f.clone())),
-                    expr: expr.clone(),
-                }
-            }
-            LogicalPlan::GroupBy { input, keys } => {
-                LogicalPlan::GroupBy {
-                    input: Box::new(input.transform(f.clone())),
-                    keys: keys.clone(),
-                }
-            }
-            LogicalPlan::Window { input, spec } => {
-                LogicalPlan::Window {
-                    input: Box::new(input.transform(f.clone())),
-                    spec: spec.clone(),
-                }
-            }
-            LogicalPlan::Aggregate { input, spec } => {
-                LogicalPlan::Aggregate {
-                    input: Box::new(input.transform(f.clone())),
-                    spec: spec.clone(),
-                }
-            }
-            LogicalPlan::Project { input, columns } => {
-                LogicalPlan::Project {
-                    input: Box::new(input.transform(f.clone())),
-                    columns: columns.clone(),
-                }
-            }
+            LogicalPlan::Source { name, attrs } => LogicalPlan::Source {
+                name: name.clone(),
+                attrs: attrs.clone(),
+            },
+            LogicalPlan::Filter { input, expr } => LogicalPlan::Filter {
+                input: Box::new(input.transform(f.clone())),
+                expr: expr.clone(),
+            },
+            LogicalPlan::Map { input, expr } => LogicalPlan::Map {
+                input: Box::new(input.transform(f.clone())),
+                expr: expr.clone(),
+            },
+            LogicalPlan::GroupBy { input, keys } => LogicalPlan::GroupBy {
+                input: Box::new(input.transform(f.clone())),
+                keys: keys.clone(),
+            },
+            LogicalPlan::Window { input, spec } => LogicalPlan::Window {
+                input: Box::new(input.transform(f.clone())),
+                spec: spec.clone(),
+            },
+            LogicalPlan::Aggregate { input, spec } => LogicalPlan::Aggregate {
+                input: Box::new(input.transform(f.clone())),
+                spec: spec.clone(),
+            },
+            LogicalPlan::Project { input, columns } => LogicalPlan::Project {
+                input: Box::new(input.transform(f.clone())),
+                columns: columns.clone(),
+            },
         };
-        
+
         f(&transformed)
     }
-    
+
     /// Get a string representation of the plan
     pub fn to_string(&self, indent: usize) -> String {
         let spaces = "  ".repeat(indent);
@@ -252,45 +234,51 @@ impl LogicalPlan {
                 format!("{}Source(name: {}, attrs: {:?})", spaces, name, attrs)
             }
             LogicalPlan::Filter { input, expr } => {
-                format!("{}Filter:\n{}\n{}Expr: {}", 
-                    spaces, 
+                format!(
+                    "{}Filter:\n{}\n{}Expr: {}",
+                    spaces,
                     input.to_string(indent + 1),
                     spaces,
                     expr.to_string()
                 )
             }
             LogicalPlan::Map { input, expr } => {
-                format!("{}Map:\n{}\n{}Expr: {}", 
-                    spaces, 
+                format!(
+                    "{}Map:\n{}\n{}Expr: {}",
+                    spaces,
                     input.to_string(indent + 1),
                     spaces,
                     expr.to_string()
                 )
             }
             LogicalPlan::GroupBy { input, keys } => {
-                format!("{}GroupBy(keys: {:?}):\n{}", 
-                    spaces, 
+                format!(
+                    "{}GroupBy(keys: {:?}):\n{}",
+                    spaces,
                     keys,
                     input.to_string(indent + 1)
                 )
             }
             LogicalPlan::Window { input, spec } => {
-                format!("{}Window({:?}):\n{}", 
-                    spaces, 
+                format!(
+                    "{}Window({:?}):\n{}",
+                    spaces,
                     spec,
                     input.to_string(indent + 1)
                 )
             }
             LogicalPlan::Aggregate { input, spec } => {
-                format!("{}Aggregate({:?}):\n{}", 
-                    spaces, 
+                format!(
+                    "{}Aggregate({:?}):\n{}",
+                    spaces,
                     spec,
                     input.to_string(indent + 1)
                 )
             }
             LogicalPlan::Project { input, columns } => {
-                format!("{}Project(columns: {:?}):\n{}", 
-                    spaces, 
+                format!(
+                    "{}Project(columns: {:?}):\n{}",
+                    spaces,
                     columns,
                     input.to_string(indent + 1)
                 )
@@ -300,7 +288,10 @@ impl LogicalPlan {
 }
 
 /// Map expression type to Arrow data type
-fn map_expr_type_to_arrow(expr_type: &ExprType) -> Result<arrow::datatypes::DataType, VectrillError> {
+#[allow(dead_code)]
+fn map_expr_type_to_arrow(
+    expr_type: &ExprType,
+) -> Result<arrow::datatypes::DataType, VectrillError> {
     match expr_type {
         ExprType::Null => Ok(arrow::datatypes::DataType::Null),
         ExprType::Boolean => Ok(arrow::datatypes::DataType::Boolean),
@@ -315,7 +306,10 @@ fn map_expr_type_to_arrow(expr_type: &ExprType) -> Result<arrow::datatypes::Data
         ExprType::Float32 => Ok(arrow::datatypes::DataType::Float32),
         ExprType::Float64 => Ok(arrow::datatypes::DataType::Float64),
         ExprType::Utf8 => Ok(arrow::datatypes::DataType::Utf8),
-        ExprType::Timestamp => Ok(arrow::datatypes::DataType::Timestamp(arrow::datatypes::TimeUnit::Microsecond, None)),
+        ExprType::Timestamp => Ok(arrow::datatypes::DataType::Timestamp(
+            arrow::datatypes::TimeUnit::Microsecond,
+            None,
+        )),
         ExprType::Date => Ok(arrow::datatypes::DataType::Date32),
         ExprType::Unknown => Ok(arrow::datatypes::DataType::Null),
     }
@@ -324,7 +318,7 @@ fn map_expr_type_to_arrow(expr_type: &ExprType) -> Result<arrow::datatypes::Data
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expression::{Expr, ScalarValue, Operator};
+    use crate::expression::{Expr, Operator, ScalarValue};
 
     #[test]
     fn test_logical_plan_creation() {
@@ -332,19 +326,22 @@ mod tests {
             name: "test".to_string(),
             attrs: HashMap::new(),
         };
-        
+
         let filter_expr = Expr::binary(
             Expr::column("id"),
             Operator::Gt,
             Expr::literal(ScalarValue::Int64(10)),
         );
-        
+
         let filter_plan = LogicalPlan::Filter {
             input: Box::new(source),
             expr: filter_expr,
         };
-        
-        assert_eq!(filter_plan.to_string(0), "Filter:\n  Source(name: test, attrs: {})\n  Expr: (id > 10)");
+
+        assert_eq!(
+            filter_plan.to_string(0),
+            "Filter:\n  Source(name: test, attrs: {})\n  Expr: (id > 10)"
+        );
     }
 
     #[test]
@@ -353,7 +350,7 @@ mod tests {
             name: "test".to_string(),
             attrs: HashMap::new(),
         };
-        
+
         let schema = source.schema().unwrap();
         assert_eq!(schema.fields().len(), 2);
         assert_eq!(schema.field(0).name(), "id");
@@ -366,19 +363,15 @@ mod tests {
             name: "test".to_string(),
             attrs: HashMap::new(),
         };
-        
-        let transformed = source.transform(|plan| {
-            match plan {
-                LogicalPlan::Source { name, attrs } => {
-                    LogicalPlan::Source {
-                        name: format!("transformed_{}", name),
-                        attrs: attrs.clone(),
-                    }
-                }
-                other => other.clone(),
-            }
+
+        let transformed = source.transform(|plan| match plan {
+            LogicalPlan::Source { name, attrs } => LogicalPlan::Source {
+                name: format!("transformed_{}", name),
+                attrs: attrs.clone(),
+            },
+            other => other.clone(),
         });
-        
+
         match transformed {
             LogicalPlan::Source { name, .. } => {
                 assert_eq!(name, "transformed_test");

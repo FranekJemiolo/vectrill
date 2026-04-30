@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-use super::{Operator, UnaryOp, ScalarValue};
+use super::{Operator, ScalarValue, UnaryOp};
 
 /// Expression IR - represents compiled expressions
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -19,15 +19,9 @@ pub enum Expr {
         right: Box<Expr>,
     },
     /// Unary expression
-    Unary {
-        op: UnaryOp,
-        expr: Box<Expr>,
-    },
+    Unary { op: UnaryOp, expr: Box<Expr> },
     /// Function call
-    Function {
-        name: String,
-        args: Vec<Expr>,
-    },
+    Function { name: String, args: Vec<Expr> },
     /// Cast expression
     Cast {
         expr: Box<Expr>,
@@ -80,22 +74,30 @@ impl Expr {
     }
 
     /// Get a string representation of the expression
+    #[allow(
+        clippy::inherent_to_string_shadow_display,
+        clippy::to_string_in_format_args
+    )]
     pub fn to_string(&self) -> String {
         match self {
             Expr::Column(name) => name.clone(),
             Expr::Literal(value) => value.to_string(),
             Expr::Binary { left, op, right } => {
-                format!("({} {} {})", left.to_string(), op, right.to_string())
+                format!("({} {} {})", left, op, right)
             }
             Expr::Unary { op, expr } => {
-                format!("{}{}", op, expr.to_string())
+                format!("{}{}", op, expr)
             }
             Expr::Function { name, args } => {
-                let args_str: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
-                format!("{}({})", name, args_str.join(", "))
+                let args_str = args
+                    .iter()
+                    .map(|arg| arg.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}({})", name, args_str)
             }
             Expr::Cast { expr, data_type } => {
-                format!("CAST({} AS {})", expr.to_string(), data_type)
+                format!("CAST({} AS {})", expr, data_type)
             }
         }
     }
@@ -166,7 +168,9 @@ impl From<ExprType> for arrow::datatypes::DataType {
             ExprType::Float32 => arrow::datatypes::DataType::Float32,
             ExprType::Float64 => arrow::datatypes::DataType::Float64,
             ExprType::Utf8 => arrow::datatypes::DataType::Utf8,
-            ExprType::Timestamp => arrow::datatypes::DataType::Timestamp(arrow::datatypes::TimeUnit::Microsecond, None),
+            ExprType::Timestamp => {
+                arrow::datatypes::DataType::Timestamp(arrow::datatypes::TimeUnit::Microsecond, None)
+            }
             ExprType::Date => arrow::datatypes::DataType::Date32,
             ExprType::Null => arrow::datatypes::DataType::Null,
             ExprType::Unknown => panic!("Cannot convert Unknown type to Arrow DataType"),
@@ -204,11 +208,7 @@ mod tests {
         let lit = Expr::literal(42i64);
         assert_eq!(lit.to_string(), "42");
 
-        let binary = Expr::binary(
-            Expr::column("a"),
-            Operator::Add,
-            Expr::column("b"),
-        );
+        let binary = Expr::binary(Expr::column("a"), Operator::Add, Expr::column("b"));
         assert_eq!(binary.to_string(), "(a + b)");
 
         let unary = Expr::unary(UnaryOp::Not, Expr::column("flag"));

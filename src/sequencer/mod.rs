@@ -178,7 +178,7 @@ impl Sequencer {
     pub fn watermark(&self) -> i64 {
         self.watermark
     }
-    
+
     /// Get the number of pending batches
     pub fn pending_batches(&self) -> usize {
         self.cursors.len()

@@ -13,28 +13,28 @@ pub enum Operator {
     LtEq,
     Gt,
     GtEq,
-    
+
     // Arithmetic operators
     Add,
     Sub,
     Mul,
     Div,
     Mod,
-    
+
     // Boolean operators
     And,
     Or,
-    
+
     // String operators
     Like,
     ILike,
     NotLike,
     NotILike,
-    
+
     // Array operators
     In,
     NotIn,
-    
+
     // Null operators
     IsNull,
     IsNotNull,
@@ -107,11 +107,17 @@ impl Operator {
         match self {
             Operator::Or => Precedence::Or,
             Operator::And => Precedence::And,
-            Operator::Eq | Operator::NotEq | Operator::Lt | Operator::LtEq | 
-            Operator::Gt | Operator::GtEq => Precedence::Comparison,
+            Operator::Eq
+            | Operator::NotEq
+            | Operator::Lt
+            | Operator::LtEq
+            | Operator::Gt
+            | Operator::GtEq => Precedence::Comparison,
             Operator::Add | Operator::Sub => Precedence::AddSub,
             Operator::Mul | Operator::Div | Operator::Mod => Precedence::MulDiv,
-            Operator::Like | Operator::ILike | Operator::NotLike | Operator::NotILike => Precedence::Comparison,
+            Operator::Like | Operator::ILike | Operator::NotLike | Operator::NotILike => {
+                Precedence::Comparison
+            }
             Operator::In | Operator::NotIn => Precedence::Comparison,
             Operator::IsNull | Operator::IsNotNull => Precedence::Comparison,
         }
@@ -122,8 +128,12 @@ impl Operator {
         match self {
             Operator::Add | Operator::Sub | Operator::Mul | Operator::Div | Operator::Mod => true,
             Operator::And | Operator::Or => true,
-            Operator::Eq | Operator::NotEq | Operator::Lt | Operator::LtEq | 
-            Operator::Gt | Operator::GtEq => true,
+            Operator::Eq
+            | Operator::NotEq
+            | Operator::Lt
+            | Operator::LtEq
+            | Operator::Gt
+            | Operator::GtEq => true,
             Operator::Like | Operator::ILike | Operator::NotLike | Operator::NotILike => true,
             Operator::In | Operator::NotIn => true,
             Operator::IsNull | Operator::IsNotNull => true,
@@ -134,10 +144,20 @@ impl Operator {
     pub fn is_comparison(&self) -> bool {
         matches!(
             self,
-            Operator::Eq | Operator::NotEq | Operator::Lt | Operator::LtEq |
-            Operator::Gt | Operator::GtEq | Operator::Like | Operator::ILike |
-            Operator::NotLike | Operator::NotILike | Operator::In | Operator::NotIn |
-            Operator::IsNull | Operator::IsNotNull
+            Operator::Eq
+                | Operator::NotEq
+                | Operator::Lt
+                | Operator::LtEq
+                | Operator::Gt
+                | Operator::GtEq
+                | Operator::Like
+                | Operator::ILike
+                | Operator::NotLike
+                | Operator::NotILike
+                | Operator::In
+                | Operator::NotIn
+                | Operator::IsNull
+                | Operator::IsNotNull
         )
     }
 

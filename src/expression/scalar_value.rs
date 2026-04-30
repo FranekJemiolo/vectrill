@@ -54,51 +54,28 @@ impl ScalarValue {
     /// Convert to Arrow array (single element)
     pub fn to_array(&self) -> arrow::array::ArrayRef {
         match self {
-            ScalarValue::Null => {
-                Arc::new(arrow::array::new_null_array(&arrow::datatypes::DataType::Null, 1))
-            }
-            ScalarValue::Boolean(value) => {
-                Arc::new(arrow::array::BooleanArray::from(vec![*value]))
-            }
-            ScalarValue::Int8(value) => {
-                Arc::new(arrow::array::Int8Array::from(vec![*value]))
-            }
-            ScalarValue::Int16(value) => {
-                Arc::new(arrow::array::Int16Array::from(vec![*value]))
-            }
-            ScalarValue::Int32(value) => {
-                Arc::new(arrow::array::Int32Array::from(vec![*value]))
-            }
-            ScalarValue::Int64(value) => {
-                Arc::new(arrow::array::Int64Array::from(vec![*value]))
-            }
-            ScalarValue::UInt8(value) => {
-                Arc::new(arrow::array::UInt8Array::from(vec![*value]))
-            }
-            ScalarValue::UInt16(value) => {
-                Arc::new(arrow::array::UInt16Array::from(vec![*value]))
-            }
-            ScalarValue::UInt32(value) => {
-                Arc::new(arrow::array::UInt32Array::from(vec![*value]))
-            }
-            ScalarValue::UInt64(value) => {
-                Arc::new(arrow::array::UInt64Array::from(vec![*value]))
-            }
-            ScalarValue::Float32(value) => {
-                Arc::new(arrow::array::Float32Array::from(vec![*value]))
-            }
-            ScalarValue::Float64(value) => {
-                Arc::new(arrow::array::Float64Array::from(vec![*value]))
-            }
+            ScalarValue::Null => Arc::new(arrow::array::new_null_array(
+                &arrow::datatypes::DataType::Null,
+                1,
+            )),
+            ScalarValue::Boolean(value) => Arc::new(arrow::array::BooleanArray::from(vec![*value])),
+            ScalarValue::Int8(value) => Arc::new(arrow::array::Int8Array::from(vec![*value])),
+            ScalarValue::Int16(value) => Arc::new(arrow::array::Int16Array::from(vec![*value])),
+            ScalarValue::Int32(value) => Arc::new(arrow::array::Int32Array::from(vec![*value])),
+            ScalarValue::Int64(value) => Arc::new(arrow::array::Int64Array::from(vec![*value])),
+            ScalarValue::UInt8(value) => Arc::new(arrow::array::UInt8Array::from(vec![*value])),
+            ScalarValue::UInt16(value) => Arc::new(arrow::array::UInt16Array::from(vec![*value])),
+            ScalarValue::UInt32(value) => Arc::new(arrow::array::UInt32Array::from(vec![*value])),
+            ScalarValue::UInt64(value) => Arc::new(arrow::array::UInt64Array::from(vec![*value])),
+            ScalarValue::Float32(value) => Arc::new(arrow::array::Float32Array::from(vec![*value])),
+            ScalarValue::Float64(value) => Arc::new(arrow::array::Float64Array::from(vec![*value])),
             ScalarValue::Utf8(value) => {
                 Arc::new(arrow::array::StringArray::from(vec![value.as_str()]))
             }
             ScalarValue::Timestamp(value) => {
                 Arc::new(arrow::array::TimestampMicrosecondArray::from(vec![*value]))
             }
-            ScalarValue::Date(value) => {
-                Arc::new(arrow::array::Date32Array::from(vec![*value]))
-            }
+            ScalarValue::Date(value) => Arc::new(arrow::array::Date32Array::from(vec![*value])),
         }
     }
 }
@@ -245,8 +222,11 @@ mod tests {
         let val = ScalarValue::Int32(42);
         let array = val.to_array();
         assert_eq!(array.len(), 1);
-        
-        let int_array = array.as_any().downcast_ref::<arrow::array::Int32Array>().unwrap();
+
+        let int_array = array
+            .as_any()
+            .downcast_ref::<arrow::array::Int32Array>()
+            .unwrap();
         assert_eq!(int_array.value(0), 42);
     }
 }

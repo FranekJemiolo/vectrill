@@ -1,9 +1,17 @@
 //! Expression compiler - compile Python AST to expression IR
 
 use serde::{Deserialize, Serialize};
+
+#[allow(unused_imports)]
 use std::collections::HashMap;
 
-use super::{Expr, Operator, UnaryOp, ScalarValue, map_python_operator, map_python_bool_op, map_python_unary_op};
+#[allow(unused_imports)]
+use crate::error::VectrillError;
+#[allow(unused_imports)]
+use crate::expression::{
+    map_python_bool_op, map_python_operator, map_python_unary_op, Expr, Operator, ScalarValue,
+    UnaryOp,
+};
 
 /// Python AST node representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +32,12 @@ pub struct CompileResult {
 pub struct ExpressionCompiler {
     /// Available column names for validation
     available_columns: Option<std::collections::HashSet<String>>,
+}
+
+impl Default for ExpressionCompiler {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ExpressionCompiler {
@@ -70,8 +84,13 @@ impl ExpressionCompiler {
     }
 
     /// Compile a Name node (column reference)
-    fn compile_name(&self, node: &PythonASTNode, _errors: &mut Vec<String>) -> Result<Expr, String> {
-        let name = node.value
+    fn compile_name(
+        &self,
+        node: &PythonASTNode,
+        _errors: &mut Vec<String>,
+    ) -> Result<Expr, String> {
+        let name = node
+            .value
             .as_ref()
             .and_then(|v| v.as_str())
             .ok_or("Name node missing value")?;
@@ -87,10 +106,12 @@ impl ExpressionCompiler {
     }
 
     /// Compile a Constant node (literal value)
-    fn compile_constant(&self, node: &PythonASTNode, _errors: &mut Vec<String>) -> Result<Expr, String> {
-        let value = node.value
-            .as_ref()
-            .ok_or("Constant node missing value")?;
+    fn compile_constant(
+        &self,
+        node: &PythonASTNode,
+        _errors: &mut Vec<String>,
+    ) -> Result<Expr, String> {
+        let value = node.value.as_ref().ok_or("Constant node missing value")?;
 
         let scalar_value = match value {
             serde_json::Value::Null => ScalarValue::Null,
@@ -112,7 +133,11 @@ impl ExpressionCompiler {
     }
 
     /// Compile a BinOp node (binary operation)
-    fn compile_bin_op(&self, node: &PythonASTNode, errors: &mut Vec<String>) -> Result<Expr, String> {
+    fn compile_bin_op(
+        &self,
+        node: &PythonASTNode,
+        errors: &mut Vec<String>,
+    ) -> Result<Expr, String> {
         if node.children.len() != 3 {
             return Err("BinOp node should have 3 children (left, op, right)".to_string());
         }
@@ -121,7 +146,8 @@ impl ExpressionCompiler {
         let op_node = &node.children[1];
         let right = self.compile_node(&node.children[2], errors)?;
 
-        let op_str = op_node.value
+        let op_str = op_node
+            .value
             .as_ref()
             .and_then(|v| v.as_str())
             .ok_or("BinOp operator missing value")?;
@@ -133,13 +159,18 @@ impl ExpressionCompiler {
     }
 
     /// Compile a BoolOp node (boolean operation)
-    fn compile_bool_op(&self, node: &PythonASTNode, errors: &mut Vec<String>) -> Result<Expr, String> {
+    fn compile_bool_op(
+        &self,
+        node: &PythonASTNode,
+        errors: &mut Vec<String>,
+    ) -> Result<Expr, String> {
         if node.children.len() < 2 {
             return Err("BoolOp node should have at least 2 children".to_string());
         }
 
         let op_node = &node.children[0];
-        let op_str = op_node.value
+        let op_str = op_node
+            .value
             .as_ref()
             .and_then(|v| v.as_str())
             .ok_or("BoolOp operator missing value")?;
@@ -158,7 +189,11 @@ impl ExpressionCompiler {
     }
 
     /// Compile a UnaryOp node (unary operation)
-    fn compile_unary_op(&self, node: &PythonASTNode, errors: &mut Vec<String>) -> Result<Expr, String> {
+    fn compile_unary_op(
+        &self,
+        node: &PythonASTNode,
+        errors: &mut Vec<String>,
+    ) -> Result<Expr, String> {
         if node.children.len() != 2 {
             return Err("UnaryOp node should have 2 children (op, operand)".to_string());
         }
@@ -166,19 +201,24 @@ impl ExpressionCompiler {
         let op_node = &node.children[0];
         let operand = self.compile_node(&node.children[1], errors)?;
 
-        let op_str = op_node.value
+        let op_str = op_node
+            .value
             .as_ref()
             .and_then(|v| v.as_str())
             .ok_or("UnaryOp operator missing value")?;
 
-        let operator = map_python_unary_op(op_str)
-            .ok_or(format!("Unsupported unary operator: {}", op_str))?;
+        let operator =
+            map_python_unary_op(op_str).ok_or(format!("Unsupported unary operator: {}", op_str))?;
 
         Ok(Expr::unary(operator, operand))
     }
 
     /// Compile a Compare node (comparison operation)
-    fn compile_compare(&self, node: &PythonASTNode, errors: &mut Vec<String>) -> Result<Expr, String> {
+    fn compile_compare(
+        &self,
+        node: &PythonASTNode,
+        errors: &mut Vec<String>,
+    ) -> Result<Expr, String> {
         if node.children.len() != 3 {
             return Err("Compare node should have 3 children (left, op, right)".to_string());
         }
@@ -187,7 +227,8 @@ impl ExpressionCompiler {
         let op_node = &node.children[1];
         let right = self.compile_node(&node.children[2], errors)?;
 
-        let op_str = op_node.value
+        let op_str = op_node
+            .value
             .as_ref()
             .and_then(|v| v.as_str())
             .ok_or("Compare operator missing value")?;
@@ -207,12 +248,11 @@ impl ExpressionCompiler {
         // First child should be the function name
         let func_node = &node.children[0];
         let func_name = match func_node.node_type.as_str() {
-            "Name" => {
-                func_node.value
-                    .as_ref()
-                    .and_then(|v| v.as_str())
-                    .ok_or("Function name missing")?
-            }
+            "Name" => func_node
+                .value
+                .as_ref()
+                .and_then(|v| v.as_str())
+                .ok_or("Function name missing")?,
             _ => return Err("Function name must be a Name node".to_string()),
         };
 
@@ -229,13 +269,11 @@ impl ExpressionCompiler {
                 if args.len() != 2 {
                     return Err("cast() function requires exactly 2 arguments".to_string());
                 }
-                
+
                 // For now, just return the first argument (proper casting would be handled later)
                 Ok(args[0].clone())
             }
-            "abs" | "length" => {
-                Ok(Expr::function(func_name.to_string(), args))
-            }
+            "abs" | "length" => Ok(Expr::function(func_name.to_string(), args)),
             _ => Ok(Expr::function(func_name.to_string(), args)),
         }
     }
@@ -248,12 +286,10 @@ pub fn compile_python_expression(
 ) -> CompileResult {
     // For now, this is a simplified implementation
     // In a real implementation, we would use Python's ast module to parse the expression
-    
+
     // Simple parsing for basic expressions
     if let Ok(expr) = parse_simple_expression(expr_str) {
-        let compiler = ExpressionCompiler::with_columns(
-            available_columns.unwrap_or_default()
-        );
+        let compiler = ExpressionCompiler::with_columns(available_columns.unwrap_or_default());
         compiler.compile(&expr)
     } else {
         CompileResult {
@@ -266,7 +302,7 @@ pub fn compile_python_expression(
 /// Simple expression parser (placeholder implementation)
 fn parse_simple_expression(expr_str: &str) -> Result<PythonASTNode, String> {
     let expr_str = expr_str.trim();
-    
+
     // Handle literals
     if let Ok(int_val) = expr_str.parse::<i64>() {
         return Ok(PythonASTNode {
@@ -275,15 +311,17 @@ fn parse_simple_expression(expr_str: &str) -> Result<PythonASTNode, String> {
             children: Vec::new(),
         });
     }
-    
+
     if let Ok(float_val) = expr_str.parse::<f64>() {
         return Ok(PythonASTNode {
             node_type: "Constant".to_string(),
-            value: Some(serde_json::Value::Number(serde_json::Number::from_f64(float_val).unwrap())),
+            value: Some(serde_json::Value::Number(
+                serde_json::Number::from_f64(float_val).unwrap(),
+            )),
             children: Vec::new(),
         });
     }
-    
+
     if let Ok(bool_val) = expr_str.parse::<bool>() {
         return Ok(PythonASTNode {
             node_type: "Constant".to_string(),
@@ -291,18 +329,19 @@ fn parse_simple_expression(expr_str: &str) -> Result<PythonASTNode, String> {
             children: Vec::new(),
         });
     }
-    
+
     // Handle string literals
-    if (expr_str.starts_with('"') && expr_str.ends_with('"')) ||
-       (expr_str.starts_with('\'') && expr_str.ends_with('\'')) {
-        let content = &expr_str[1..expr_str.len()-1];
+    if (expr_str.starts_with('"') && expr_str.ends_with('"'))
+        || (expr_str.starts_with('\'') && expr_str.ends_with('\''))
+    {
+        let content = &expr_str[1..expr_str.len() - 1];
         return Ok(PythonASTNode {
             node_type: "Constant".to_string(),
             value: Some(serde_json::Value::String(content.to_string())),
             children: Vec::new(),
         });
     }
-    
+
     // Handle column names (simple identifiers)
     if is_valid_identifier(expr_str) {
         return Ok(PythonASTNode {
@@ -311,7 +350,7 @@ fn parse_simple_expression(expr_str: &str) -> Result<PythonASTNode, String> {
             children: Vec::new(),
         });
     }
-    
+
     // Handle simple binary operations
     if let Some((left, op, right)) = parse_binary_operation(expr_str) {
         return Ok(PythonASTNode {
@@ -328,7 +367,7 @@ fn parse_simple_expression(expr_str: &str) -> Result<PythonASTNode, String> {
             ],
         });
     }
-    
+
     Err(format!("Unable to parse expression: {}", expr_str))
 }
 
@@ -337,7 +376,7 @@ fn is_valid_identifier(s: &str) -> bool {
     if s.is_empty() {
         return false;
     }
-    
+
     s.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
 
@@ -345,13 +384,13 @@ fn is_valid_identifier(s: &str) -> bool {
 fn parse_binary_operation(expr_str: &str) -> Option<(PythonASTNode, String, PythonASTNode)> {
     // Simple parsing for common operators
     let operators = vec!["==", "!=", "<=", ">=", "<", ">", "+", "-", "*", "/"];
-    
+
     for op in &operators {
         if let Some(pos) = expr_str.find(op) {
             if pos > 0 && pos + op.len() < expr_str.len() {
                 let left_str = expr_str[..pos].trim();
                 let right_str = expr_str[pos + op.len()..].trim();
-                
+
                 if let Ok(left) = parse_simple_expression(left_str) {
                     if let Ok(right) = parse_simple_expression(right_str) {
                         return Some((left, op.to_string(), right));
@@ -360,7 +399,7 @@ fn parse_binary_operation(expr_str: &str) -> Option<(PythonASTNode, String, Pyth
             }
         }
     }
-    
+
     None
 }
 
@@ -383,13 +422,13 @@ mod tests {
     fn test_simple_literal_parsing() {
         let expr = expr_from_string("42");
         assert_eq!(expr, Expr::Literal(ScalarValue::Int64(42)));
-        
+
         let expr = expr_from_string("3.14");
         assert_eq!(expr, Expr::Literal(ScalarValue::Float64(3.14)));
-        
+
         let expr = expr_from_string("true");
         assert_eq!(expr, Expr::Literal(ScalarValue::Boolean(true)));
-        
+
         let expr = expr_from_string("'hello'");
         assert_eq!(expr, Expr::Literal(ScalarValue::Utf8("hello".to_string())));
     }
@@ -428,23 +467,23 @@ mod tests {
     fn test_compiler_with_validation() {
         let available_columns = ["col1", "col2"].iter().map(|s| s.to_string()).collect();
         let compiler = ExpressionCompiler::with_columns(available_columns);
-        
+
         let valid_node = PythonASTNode {
             node_type: "Name".to_string(),
             value: Some(serde_json::Value::String("col1".to_string())),
             children: Vec::new(),
         };
-        
+
         let result = compiler.compile(&valid_node);
         assert!(result.errors.is_empty());
         assert_eq!(result.expr, Expr::Column("col1".to_string()));
-        
+
         let invalid_node = PythonASTNode {
             node_type: "Name".to_string(),
             value: Some(serde_json::Value::String("col3".to_string())),
             children: Vec::new(),
         };
-        
+
         let result = compiler.compile(&invalid_node);
         assert!(!result.errors.is_empty());
     }

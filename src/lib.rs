@@ -5,13 +5,13 @@
 //! - Rust execution core
 //! - Python DSL and control plane (via PyO3)
 
-pub mod sequencer;
-pub mod operators;
-pub mod ingestion;
 pub mod connectors;
-pub mod expression;
-pub mod planner;
 pub mod error;
+pub mod expression;
+pub mod ingestion;
+pub mod operators;
+pub mod planner;
+pub mod sequencer;
 
 #[cfg(feature = "cli")]
 pub mod cli;
@@ -19,10 +19,10 @@ pub mod cli;
 #[cfg(feature = "python")]
 pub mod ffi;
 
+pub use arrow::datatypes::SchemaRef;
+pub use arrow::record_batch::RecordBatch;
 pub use error::{Result, VectrillError};
 pub use operators::{Operator, Pipeline};
-pub use arrow::record_batch::RecordBatch;
-pub use arrow::datatypes::SchemaRef;
 
 /// Re-export Arrow for convenience
 pub use arrow;
