@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["compiler","functions","ir","operators","physical","scalar_value"]};

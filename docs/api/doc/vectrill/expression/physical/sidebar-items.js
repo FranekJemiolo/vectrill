@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ExpressionError"],"fn":["create_physical_expr","determine_binary_result_type","determine_function_result_type","determine_unary_result_type","parse_data_type_string","promote_arithmetic_types"],"struct":["BinaryExpr","CastExpr","ColumnExpr","FunctionExpr","LiteralExpr","UnaryExpr"],"trait":["PhysicalExpr"],"type":["Result"]};

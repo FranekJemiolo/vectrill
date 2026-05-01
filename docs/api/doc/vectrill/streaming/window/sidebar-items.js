@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["WindowSpec","WindowType"],"fn":["assign_to_window"],"struct":["WindowKey"]};
