@@ -179,11 +179,15 @@ class TestAggregations:
     
     def test_window_functions(self, aggregation_data):
         """Test window functions"""
+        # Add id column for ordering
+        data_with_id = aggregation_data.copy()
+        data_with_id['id'] = range(len(data_with_id))
+        
         # Test running sum
-        pandas_result = aggregation_data.copy()
+        pandas_result = data_with_id.copy()
         pandas_result['running_sum'] = pandas_result.groupby('group')['value1'].cumsum()
         
-        vectrill_df = vectrill.from_pandas(aggregation_data)
+        vectrill_df = vectrill.from_pandas(data_with_id)
         vectrill_result = vectrill_df.with_column(
             vectrill.functions.sum('value1').over(vectrill.window.partition_by('group').order_by('id')),
             'running_sum'
