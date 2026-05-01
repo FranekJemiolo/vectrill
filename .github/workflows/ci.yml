@@ -87,10 +87,15 @@ jobs:
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Install Python dependencies
-        run: uv sync --dev
+        run: |
+          uv pip install --upgrade pip setuptools wheel
+          uv sync --dev
+
+      - name: Install cffi for build
+        run: uv pip install cffi
 
       - name: Build Python package
-        run: uv run maturin build --release
+        run: uv run maturin build --release --features python
 
       - name: Install Python package
         run: uv pip install target/wheels/*.whl
