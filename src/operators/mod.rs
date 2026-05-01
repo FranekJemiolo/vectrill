@@ -1,9 +1,11 @@
 //! Operators for data processing
 
+pub mod aggregation;
 pub mod filter;
 pub mod map;
 pub mod pipeline;
 
+pub use aggregation::{AggregateOperator, AggregateFunction};
 pub use filter::FilterOperator;
 pub use map::{MapOperator, ProjectionOperator};
 pub use pipeline::{Operator, Pipeline};

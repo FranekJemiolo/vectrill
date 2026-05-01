@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use thiserror::Error;
 
-use super::{Expr, Operator, ScalarValue, UnaryOp, global_registry};
+use super::{global_registry, Expr, Operator, ScalarValue, UnaryOp};
 use arrow::array::Int64Array;
 
 /// Expression evaluation errors
