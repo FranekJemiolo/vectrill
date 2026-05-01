@@ -118,4 +118,6 @@ jobs:
       - name: Run Python tests
         run: |
           # Use uv run to ensure proper environment with all dependencies
-          uv run pytest tests/python/ -v
+          # Change to tests directory to avoid local import conflicts
+          cd tests
+          uv run pytest python/ -v
