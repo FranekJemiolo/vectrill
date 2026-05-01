@@ -52,7 +52,8 @@ fn bench_sequencer_flush(c: &mut Criterion) {
             sequencer.ingest(batch).unwrap();
 
             b.iter(|| {
-                black_box(sequencer.flush().unwrap());
+                let result = sequencer.flush();
+                black_box(result);
             });
         });
     }
