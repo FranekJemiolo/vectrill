@@ -1,0 +1,82 @@
+# GitHub Pages configuration for Vectrill documentation
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+plugins:
+  - jekyll-sitemap
+  - jekyll-feed
+
+# Site settings
+title: Vectrill
+description: High-performance Arrow-native streaming engine with Python DSL and Rust execution core
+baseurl: /vectrill
+url: https://FranekJemiolo.github.io
+
+# Navigation
+navigation:
+  - title: Getting Started
+    url: /getting-started
+  - title: Architecture
+    url: /architecture
+  - title: API Reference
+    url: /api
+  - title: Examples
+    url: /examples
+  - title: Performance
+    url: /performance
+  - title: Contributing
+    url: /contributing
+
+# Collections
+collections:
+  milestones:
+    output: true
+    permalink: /:collection/:name/
+
+# Exclude files
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+  - target/
+  - Cargo.toml
+  - Cargo.lock
+  - .git/
+  - .gitignore
+  - scripts/
+  - tests/
+  - benches/
+  - python/
+  - src/
+  - .venv/
+  - uv.lock
+  - docker-compose.test.yml
+  - Dockerfile.test
+  - .pytest_cache/
+  - benchmark_results.json
+  - .pre-commit-config.yaml
+
+# Include files
+include:
+  - _pages
+
+# Markdown extensions
+markdown_ext: "markdown,mkdown,mkdn,mkd,md"
+
+# Sass configuration
+sass:
+  sass_dir: _sass
+  style: compressed
+
+# Default values
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"

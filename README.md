@@ -130,11 +130,23 @@ See [docs/](docs/) for detailed milestone implementation plans.
 git clone https://github.com/FranekJemiolo/vectrill.git
 cd vectrill
 
-# Build the Rust library
-cargo build --release
+# Install Python dependencies
+uv sync
+uv sync --dev  # Include dev dependencies
 
-# Install Python package
-pip install maturin
+# Check code
+cargo check
+
+# Run tests
+cargo test
+
+# Run e2e tests with docker-compose
+./scripts/run_e2e_tests.sh
+
+# Build with all features
+cargo build --features connectors-full,web-ui,cli
+
+# Build Python package
 maturin develop
 ```
 
@@ -151,49 +163,270 @@ pip install -e ".[examples]"
 
 ### Python API
 
+Vectrill provides a high-performance streaming engine with a Python DSL that compiles to efficient Rust execution. The API supports both functional programming and SQL-like operations.
+
+#### Core Operations
+
 ```python
 import vectrill as vt
-import polars as pl
 
-# Create a streaming pipeline
-stream = (
-    vt.source("file", path="data.csv", format="csv")
-    .filter("temperature > 20")
-    .map("temp_f = temperature * 1.8 + 32")
-    .group_by("device_id")
-    .window("10s")
-    .agg({"temp_f": "avg", "humidity": "max"})
-)
+# Data Sources
+stream = vt.source("file", path="data.csv", format="csv")           # Read from files
+stream = vt.source("kafka", topic="events")                 # Stream from Kafka  
+stream = vt.source("postgres", query="SELECT * FROM events")       # Query databases
+stream = vt.memory([{"id": 1, "value": 100}, ...])           # In-memory data
 
-# Execute the pipeline
+# Transformations
+stream = stream.filter("temperature > 20")                        # Filter predicates
+stream = stream.map("temp_f = temperature * 1.8 + 32")              # Arithmetic expressions  
+stream = stream.group_by("device_id")                                # Group by key
+stream = stream.window("10s")                                        # Time windows
+stream = stream.agg({"temp_f": "avg", "humidity": "max"})               # Aggregations
+
+# Advanced Operations
+stream = stream.filter(pl.col("temperature") > 20)                   # Polars expressions
+stream = stream.select(["device_id", "temperature"])                       # Column selection
+stream = stream.rename({"temp": "temperature_f"})                       # Column renaming
+
+# Output Sinks  
+stream = vt.sink("file", path="output.parquet")                 # Write to files
+stream = vt.sink("postgres", table="results")                       # Write to databases
+stream = vt.sink("memory")                                         # In-memory collection
+
+# Execute pipeline
 for batch in stream.execute():
     print(batch)
 ```
 
+#### Supported Operations
+
+| Category | Operations | Description |
+|-----------|------------|-------------|
+| **Sources** | `source()` | Read from CSV, JSON, Parquet, Kafka, PostgreSQL, MySQL, in-memory |
+| **Filters** | `filter()` | Apply predicates with Python expressions or Polars syntax |
+| **Maps** | `map()` | Transform data with arithmetic or string operations |
+| **Windows** | `window()` | Time-based windows (tumbling, sliding, session) |
+| **Aggregations** | `agg()` | Group aggregations (sum, avg, min, max, count, distinct) |
+| **Joins** | `join()` | Stream joins and temporal joins |
+| **Select** | `select()` | Column selection and projection |
+| **Time** | `time_column()` | Extract timestamps for time-based operations |
+| **Watermarks** | `watermark()` | Configure late data handling |
+
+#### Advanced Features
+
+- **Expression Engine**: Full Python/Polars expression support with constant folding
+- **Query Planner**: Logical to physical plan conversion with optimization
+- **Operator Fusion**: Automatic combining of compatible operators for performance
+- **Streaming Semantics**: Event ordering, watermarks, and stateful processing
+- **Performance Counters**: Built-in metrics and monitoring
+
 ### Rust API
 
 ```rust
-use vectrill::{Sequencer, MicroBatch};
+use vectrill::{Sequencer, Expression, Filter, Map, Aggregate};
 use arrow::record_batch::RecordBatch;
 
-// Create a sequencer
-let sequencer = Sequencer::new(config);
+// Create optimized execution plan
+let plan = QueryPlanner::optimize(
+    Filter::new(Expression::gt("temperature", 20))
+    .chain(Map::new("temp_f = temperature * 1.8 + 32"))
+    .chain(Aggregate::group_by("device_id"))
+);
 
-// Ingest micro-batches
-sequencer.ingest(batch1)?;
-sequencer.ingest(batch2)?;
-
-// Get ordered results
-for batch in sequencer.flush()? {
-    println!("Batch: {:?}", batch);
+// Execute with streaming engine
+let mut runtime = StreamingRuntime::new();
+for batch in runtime.execute(plan) {
+    println!("Processed: {} rows", batch.num_rows());
 }
 ```
 
----
+#### Advanced Operations
+
+```rust
+// Window operations
+let tumbling_window = stream
+    .window("5s")
+    .agg({"temperature": "avg"});
+
+let sliding_window = stream
+    .window("10s", "5s", "5s")
+    .agg({"temperature": "max"});
+
+// Joins
+let joined = stream1.join(stream2, on="user_id", within="10s");
+
+// Complex expressions
+let filtered = stream.filter(
+    Expression::and(
+        Expression::gt("temperature", 20),
+        Expression::contains(pl.col("device_type"), "sensor")
+    )
+);
+```
+
+#### Core Components
+
+- **Expression Engine**: Compile-time expression evaluation with constant folding and CSE
+- **Query Planner**: Cost-based optimization with predicate pushdown
+- **Streaming Runtime**: Watermark management and micro-batching
+- **Memory Pool**: Arrow-based buffer management for zero-copy operations
+- **Performance Counters**: Built-in metrics and monitoring
+
+## 📚 DSL Reference
+
+### Python DSL Syntax
+
+Vectrill's Python DSL provides a fluent API that compiles to optimized Rust execution plans. The DSL supports both string expressions and Polars syntax for maximum flexibility.
+
+#### Expression Types
+
+**String Expressions:**
+```python
+# Simple arithmetic
+stream.map("temp_f = temperature * 1.8 + 32")
+stream.map("value = (price * quantity) * tax_rate")
+
+# String operations  
+stream.map("name = upper(device_name)")
+stream.map("category = substring(event_type, 0, 3)")
+
+# Boolean logic
+stream.filter("temperature > 20 AND humidity < 80")
+stream.filter("device_type == 'sensor' OR device_type == 'gateway'")
+```
+
+**Polars Expressions:**
+```python
+import polars as pl
+
+# Column references
+stream.filter(pl.col("temperature") > 20)
+stream.select([pl.col("device_id"), pl.col("temperature")])
+
+# Complex expressions
+stream.filter(
+    (pl.col("temperature") > 20) & 
+    (pl.col("humidity") < 80) &
+    (pl.col("device_type").str.contains("sensor"))
+)
+
+# Mathematical operations
+stream.map("temp_c = (pl.col("temperature") - 32) * 5/9")
+stream.map("heat_index = pl.col("temperature") * pl.col("humidity"))
+```
+
+#### Window Operations
+
+```python
+# Tumbling windows (fixed size, non-overlapping)
+stream.window("5s")  # 5-second tumbling windows
+stream.window("1m")  # 1-minute tumbling windows
+
+# Sliding windows (fixed size, overlapping)  
+stream.window("10s", "5s")  # 10s window, slide every 5s
+stream.window("1h", "15m")   # 1-hour window, slide every 15m
+
+# Session windows (gap-based)
+stream.window("session", "30m")  # Session windows with 30m timeout
+```
+
+#### Aggregation Functions
+
+```python
+# Basic aggregations
+stream.agg({
+    "temperature": "avg",           # Average
+    "humidity": "max",              # Maximum  
+    "pressure": "min",              # Minimum
+    "count": "count",              # Row count
+    "devices": "distinct"            # Distinct count
+})
+
+# Multiple aggregations
+stream.agg({
+    "temp_avg": "avg(temperature)",
+    "temp_max": "max(temperature)", 
+    "temp_min": "min(temperature)",
+    "device_count": "count(device_id)"
+})
+
+# Window-specific aggregations
+stream.window("5s").agg({
+    "temp_avg": "avg(temperature)",
+    "event_count": "count(*)"
+})
+```
+
+#### Join Operations
+
+```python
+# Stream joins
+stream1.join(stream2, on="user_id")                    # Inner join
+stream1.left_join(stream2, on="user_id")               # Left join
+stream1.right_join(stream2, on="user_id")              # Right join
+
+# Temporal joins (time-based)
+stream1.join(stream2, on="user_id", within="10s")      # Join within 10s window
+stream1.join(stream2, on="user_id", before="event_time") # Join before event timestamp
+```
+
+#### Data Sources and Sinks
+
+```python
+# Sources
+vt.source("file", path="data.csv", format="csv")        # CSV files
+vt.source("json", path="data.json")                     # JSON files  
+vt.source("parquet", path="data.parquet")              # Parquet files
+vt.source("kafka", topic="events", bootstrap="localhost:9092")  # Kafka
+vt.source("postgres", connection="postgresql://...", query="SELECT * FROM events")  # PostgreSQL
+vt.memory([{"id": 1, "value": 100}])               # In-memory
+
+# Sinks
+vt.sink("file", path="output.parquet")               # Parquet output
+vt.sink("csv", path="output.csv")                  # CSV output
+vt.sink("kafka", topic="results")                   # Kafka output
+vt.sink("postgres", table="results")                 # PostgreSQL output
+vt.sink("memory")                                     # Memory collection
+```
+
+#### Configuration Options
+
+```python
+# Sequencer configuration
+stream.config(
+    batch_size=1000,              # Micro-batch size
+    max_lateness_ms=5000,         # Max late data tolerance
+    flush_interval_ms=1000,        # Flush frequency
+    ordering="by_timestamp",       # Event ordering
+    late_data_policy="drop"        # How to handle late data
+)
+
+# Watermark configuration  
+stream.watermark("event_time", max_lateness="10s")  # Watermark with 10s lateness
+```
+
+### Supported Data Types
+
+- **Numeric**: Integers (i32, i64), Floats (f32, f64)
+- **Strings**: UTF-8 encoded text data
+- **Booleans**: True/False values
+- **Timestamps**: Unix epoch timestamps (milliseconds)
+- **Arrays**: List/Array structures for nested data
+
+### Performance Optimizations
+
+The DSL automatically applies several optimizations:
+
+- **Constant Folding**: Pre-computes constant expressions at compile time
+- **Predicate Pushdown**: Moves filters closer to data sources  
+- **Operator Fusion**: Combines compatible operators into single pass
+- **Projection Elimination**: Removes unused column projections
+- **Common Subexpression Elimination**: Avoids duplicate computations
 
 ## 🧪 Development
 
 ### Prerequisites
+
 - Rust 1.70+
 - Python 3.12+
 - uv (for Python dependency management)
