@@ -254,11 +254,11 @@ jobs:
 
       - name: Run integration tests
         run: |
-          cargo test --test integration --features spreadsheet --verbose
+          cargo test --lib --features spreadsheet --verbose
 
       - name: Run end-to-end tests
         run: |
-          cargo test --test e2e --features spreadsheet --verbose
+          cargo test --test e2e_test --features spreadsheet --verbose
 
   validate-spreadsheet-templates:
     name: Validate Spreadsheet Templates
@@ -279,7 +279,7 @@ jobs:
 
       - name: Validate all templates
         run: |
-          cargo test --features spreadsheet \
+          cargo test --features spreadsheet --verbose \
             test_template_manager_creation \
             test_template_listing \
             test_template_retrieval \
