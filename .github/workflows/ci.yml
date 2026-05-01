@@ -91,10 +91,8 @@ jobs:
         run: |
           uv venv .venv
           source .venv/bin/activate
-          # Install main dependencies
-          uv sync
-          # Install dev dependencies explicitly
-          uv sync --group dev
+          # Install all dependencies including dev dependencies
+          uv sync --all-groups
           # Verify pytest is available
           uv run python -c "import pytest; print('pytest available')"
 
