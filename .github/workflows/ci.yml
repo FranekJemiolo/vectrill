@@ -121,6 +121,7 @@ jobs:
       - name: Run Python tests
         run: |
           # Use uv run to ensure proper environment with all dependencies
-          # Change to tests directory to avoid local import conflicts
+          # Change to tests directory and set PYTHONPATH to use installed package
           cd tests
+          export PYTHONPATH=""
           uv run pytest python/ -v
