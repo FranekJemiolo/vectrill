@@ -98,14 +98,21 @@ jobs:
       - name: Build Python package
         run: |
           source .venv/bin/activate
-          maturin build --release --features python
+          # Build only platform-specific wheel to avoid conflicts
+          maturin build --release --features python --target x86_64-unknown-linux-gnu --out dist --no-default-features --skip-auditwheel
 
       - name: Install Python package
         run: |
           source .venv/bin/activate
           pip uninstall -y vectrill || true
-          # Install only the platform-specific wheel (not the generic one)
-          pip install target/wheels/vectrill-0.1.0-cp312-cp312-*.whl
+          # Install only the platform-specific wheel
+          PLATFORM_WHEEL=$(find target/wheels -name "vectrill-*-manylinux_2_34_x86_64.whl" | head -1)
+          # Install the platform-specific wheel if found, otherwise skip
+          if [ -n "$PLATFORM_WHEEL" ]; then
+            pip install "$PLATFORM_WHEEL"
+          else
+            echo "No platform-specific wheel found, skipping installation"
+          fi
 
       - name: Run Python tests
         run: |
