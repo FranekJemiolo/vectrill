@@ -1,6 +1,6 @@
 //! Pipeline implementation for chaining operators
 
-use crate::error::Result;
+use crate::error::{Result, VectrillError};
 use crate::RecordBatch;
 
 /// Trait for all operators in the pipeline

@@ -11,7 +11,7 @@ use pyo3::prelude::*;
 
 #[cfg(feature = "python")]
 pub fn export_batch_to_python(
-    batch: &crate::RecordBatch,
+    _batch: &crate::RecordBatch,
     py: Python,
 ) -> PyResult<(PyObject, PyObject)> {
     // Placeholder implementation for M2
