@@ -65,7 +65,13 @@ jobs:
         run: |
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             cargo test --lib --features="${{ matrix.features }}" --verbose
-            cargo test --test '*' --features="${{ matrix.features }}" --verbose --exclude e2e_connectors_comprehensive
+            cargo test --test sequencer_performance --features="${{ matrix.features }}" --verbose
+            cargo test --test sequencer_functional --features="${{ matrix.features }}" --verbose
+            cargo test --test cross_reference --features="${{ matrix.features }}" --verbose
+            cargo test --test e2e_test --features="${{ matrix.features }}" --verbose
+            cargo test --test e2e_advanced_features --features="${{ matrix.features }}" --verbose
+            cargo test --test e2e_connectors --features="${{ matrix.features }}" --verbose
+            cargo test --test sequencer_optimization_benchmark --features="${{ matrix.features }}" --verbose
           else
             cargo test --lib --test '*' --features="${{ matrix.features }}" --verbose
           fi
