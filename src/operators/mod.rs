@@ -5,7 +5,7 @@ pub mod filter;
 pub mod map;
 pub mod pipeline;
 
-pub use aggregation::{AggregateOperator, AggregateFunction};
+pub use aggregation::{AggregateFunction, AggregateOperator};
 pub use filter::FilterOperator;
 pub use map::{MapOperator, ProjectionOperator};
 pub use pipeline::{Operator, Pipeline};
