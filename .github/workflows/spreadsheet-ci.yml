@@ -155,10 +155,10 @@ jobs:
 
       - name: Run performance benchmarks
         run: |
-          cargo test --release --features spreadsheet \
+          cargo test --release --features spreadsheet -- \
             test_large_dataset_performance \
             test_memory_usage \
-            -- --nocapture
+            --nocapture
 
       - name: Upload performance results
         uses: actions/upload-artifact@v4
