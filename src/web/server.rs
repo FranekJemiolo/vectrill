@@ -22,7 +22,7 @@ use tokio::time::{interval, Duration};
 use tower_http::cors::{Any, CorsLayer};
 
 #[cfg(feature = "spreadsheet")]
-use crate::spreadsheet::api::{OperationType, SpreadsheetRequest, SpreadsheetResponse};
+use crate::spreadsheet::api::{SpreadsheetRequest, SpreadsheetResponse};
 
 /// Metrics response
 #[derive(Debug, Serialize)]
