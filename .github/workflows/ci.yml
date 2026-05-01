@@ -99,8 +99,8 @@ jobs:
       - name: Build Python package
         run: |
           source .venv/bin/activate
-          # Build only platform-specific wheel to avoid conflicts
-          maturin build --release --features python --target x86_64-unknown-linux-gnu --out dist --no-default-features --skip-auditwheel
+          # Build platform-specific wheel with Python bindings
+          maturin build --release --features python --target x86_64-unknown-linux-gnu --out dist --skip-auditwheel
 
       - name: Install Python package
         run: |
