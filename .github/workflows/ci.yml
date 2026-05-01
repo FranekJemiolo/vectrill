@@ -93,8 +93,6 @@ jobs:
           source .venv/bin/activate
           # Install all dependencies using uv sync (includes dev dependencies)
           uv sync --dev
-          # Ensure pytest is available in the virtual environment
-          uv add --dev pytest pytest-asyncio
 
       - name: Build Python package
         run: |
@@ -117,6 +115,5 @@ jobs:
 
       - name: Run Python tests
         run: |
-          source .venv/bin/activate
-          # Use uv run to ensure proper environment
+          # Use uv run to ensure proper environment with all dependencies
           uv run pytest tests/python/ -v
