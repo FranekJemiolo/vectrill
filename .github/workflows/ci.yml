@@ -94,6 +94,8 @@ jobs:
           pip install --upgrade pip setuptools wheel
           pip install cffi
           uv sync --dev
+          # Ensure pytest is available
+          pip install pytest
 
       - name: Build Python package
         run: |
