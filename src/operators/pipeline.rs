@@ -1,6 +1,6 @@
 //! Pipeline implementation for chaining operators
 
-use crate::error::{Result, VectrillError};
+use crate::error::Result;
 use crate::RecordBatch;
 
 /// Trait for all operators in the pipeline
@@ -106,6 +106,7 @@ mod tests {
 
     impl Operator for AddConstantOperator {
         fn process(&mut self, batch: RecordBatch) -> Result<RecordBatch> {
+            use crate::error::VectrillError;
             // Find the column
             let col_idx = batch
                 .schema()
