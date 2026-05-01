@@ -124,4 +124,4 @@ jobs:
           # Move to temporary directory to avoid local import conflicts
           cd /tmp
           cp -r /home/runner/work/vectrill/vectrill/tests ./tests
-          uv run pytest tests/python/ -v
+          /home/runner/work/vectrill/vectrill/.venv/bin/python -m pytest tests/python/ -v
