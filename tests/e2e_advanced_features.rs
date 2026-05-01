@@ -7,7 +7,6 @@ use vectrill::performance::{
     global_counter_registry, Counter, CounterRegistry, CounterType, Timer,
 };
 
-#[test]
 fn test_expression_optimization_constant_folding() {
     let mut optimizer = ExprOptimizer::new();
 
@@ -22,7 +21,6 @@ fn test_expression_optimization_constant_folding() {
     assert_eq!(optimized, Expr::Literal(ScalarValue::Int64(30)));
 }
 
-#[test]
 fn test_expression_optimization_cse() {
     let mut optimizer = ExprOptimizer::new();
 
@@ -54,7 +52,6 @@ fn test_expression_optimization_cse() {
     assert!(matches!(optimized2, Expr::Binary { .. }));
 }
 
-#[test]
 fn test_buffer_pool_reuse() {
     let pool = BufferPool::new(5);
 
@@ -74,7 +71,6 @@ fn test_buffer_pool_reuse() {
     assert!(stats.pools_count > 0);
 }
 
-#[test]
 fn test_global_buffer_pool() {
     let pool = global_buffer_pool();
 
@@ -87,7 +83,6 @@ fn test_global_buffer_pool() {
     assert!(stats.pools_count > 0);
 }
 
-#[test]
 fn test_performance_counter() {
     let counter = Counter::new(CounterType::RowsProcessed);
 
@@ -103,7 +98,6 @@ fn test_performance_counter() {
     assert_eq!(counter.get(), 0);
 }
 
-#[test]
 fn test_counter_registry() {
     let mut registry = CounterRegistry::new();
 
@@ -118,7 +112,6 @@ fn test_counter_registry() {
     assert_eq!(snapshot.get("test_counter"), Some(&1));
 }
 
-#[test]
 fn test_timer() {
     let counter = std::sync::Arc::new(Counter::new(CounterType::TotalTimeUs));
     let mut timer = Timer::new(counter.clone());
@@ -130,7 +123,6 @@ fn test_timer() {
     assert!(counter.get() > 0);
 }
 
-#[test]
 fn test_global_counter_registry() {
     let registry = global_counter_registry();
     let mut registry = registry.lock().unwrap();
@@ -146,7 +138,6 @@ fn test_global_counter_registry() {
     assert_eq!(snapshot_after.get("e2e_test"), Some(&0));
 }
 
-#[test]
 fn test_expression_optimization_boolean_folding() {
     let mut optimizer = ExprOptimizer::new();
 
@@ -161,7 +152,6 @@ fn test_expression_optimization_boolean_folding() {
     assert_eq!(optimized, Expr::Literal(ScalarValue::Boolean(false)));
 }
 
-#[test]
 fn test_expression_optimization_unary_negation() {
     let mut optimizer = ExprOptimizer::new();
 
@@ -173,4 +163,19 @@ fn test_expression_optimization_unary_negation() {
 
     let optimized = optimizer.optimize(expr);
     assert_eq!(optimized, Expr::Literal(ScalarValue::Int64(-42)));
+}
+
+fn main() {
+    test_expression_optimization_constant_folding();
+    test_expression_optimization_cse();
+    test_buffer_pool_reuse();
+    test_global_buffer_pool();
+    test_performance_counter();
+    test_counter_registry();
+    test_timer();
+    test_global_counter_registry();
+    test_expression_optimization_boolean_folding();
+    test_expression_optimization_unary_negation();
+    
+    println!("✅ All advanced features tests passed!");
 }

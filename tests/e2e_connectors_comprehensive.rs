@@ -3,11 +3,14 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
-use tokio::time::{sleep, Duration};
 
-use vectrill::connectors::file_sink::FileSinkFormat;
+#[cfg(feature = "kafka")]
 use vectrill::connectors::kafka::KafkaFormat;
+#[cfg(feature = "kafka")]
 use vectrill::connectors::sink::{FileSink, KafkaSink, Sink};
+#[cfg(not(feature = "kafka"))]
+use vectrill::connectors::sink::{FileSink, Sink};
+use vectrill::connectors::file_sink::FileSinkFormat;
 use vectrill::connectors::{Connector, FileConnector, MemoryConnector};
 use vectrill::{RecordBatch, VectrillError};
 
@@ -190,6 +193,7 @@ async fn test_file_to_file_csv() -> Result<(), VectrillError> {
 }
 
 /// Test MemoryConnector -> KafkaSink (JSON) - Mock test
+#[cfg(feature = "kafka")]
 #[tokio::test]
 async fn test_memory_to_kafka_json() -> Result<(), VectrillError> {
     let schema = create_test_schema();
@@ -241,6 +245,7 @@ async fn test_memory_to_kafka_json() -> Result<(), VectrillError> {
 }
 
 /// Test MemoryConnector -> KafkaSink (CSV) - Mock test
+#[cfg(feature = "kafka")]
 #[tokio::test]
 async fn test_memory_to_kafka_csv() -> Result<(), VectrillError> {
     let schema = create_test_schema();
@@ -377,7 +382,7 @@ async fn test_error_handling() -> Result<(), VectrillError> {
     let schema = create_test_schema();
 
     // Create memory source with custom schema
-    let mut source = MemoryConnector::with_schema(
+    let _source = MemoryConnector::with_schema(
         "test_error_handling".to_string(),
         schema.clone(),
         1,   // batch_count

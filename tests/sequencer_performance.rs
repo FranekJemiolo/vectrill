@@ -155,10 +155,10 @@ fn test_sequencer_sorted_vs_unsorted_performance() {
     let ingest_time_unsorted = start.elapsed();
 
     let start = Instant::now();
-    let mut total_processed = 0;
+    let _total_processed = 0;
 
     while let Some(result_batch) = sequencer_unsorted.next_batch() {
-        total_processed += result_batch.num_rows();
+        let _ = result_batch.num_rows();
     }
 
     let process_time_unsorted = start.elapsed();
@@ -175,10 +175,10 @@ fn test_sequencer_sorted_vs_unsorted_performance() {
     let ingest_time_sorted = start.elapsed();
 
     let start = Instant::now();
-    total_processed = 0;
+    let _total_processed = 0;
 
     while let Some(result_batch) = sequencer_sorted.next_batch() {
-        total_processed += result_batch.num_rows();
+        let _ = result_batch.num_rows();
     }
 
     let process_time_sorted = start.elapsed();
@@ -235,7 +235,7 @@ fn test_sequencer_batch_size_impact() {
             sequencer.ingest(batch).unwrap();
         }
 
-        let ingest_time = start.elapsed();
+        let _ingest_time = start.elapsed();
 
         // Process all batches
         let start = Instant::now();
