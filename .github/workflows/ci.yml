@@ -26,7 +26,7 @@ jobs:
             features: "performance connectors-full"
           - os: windows-latest
             rust: stable
-            features: "performance connectors-basic"
+            features: "connectors-basic"
     
     steps:
       - name: Checkout code
