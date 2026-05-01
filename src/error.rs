@@ -48,7 +48,19 @@ pub enum VectrillError {
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
+    /// Transformation error
+    #[error("Transformation error: {0}")]
+    Transformation(String),
+
     /// Generic error
     #[error("{0}")]
     Generic(String),
+
+    /// Not implemented error
+    #[error("Not implemented: {0}")]
+    NotImplemented(String),
+
+    /// Invalid data error
+    #[error("Invalid data: {0}")]
+    InvalidData(String),
 }

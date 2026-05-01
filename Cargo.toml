@@ -87,6 +87,7 @@ connectors-basic = ["json", "parquet"]
 kafka = ["rdkafka"]
 performance = ["criterion", "pprof"]
 web-ui = ["axum", "tower", "tower-http", "tokio-tungstenite", "uuid", "futures"]
+spreadsheet = []
 
 # Build extension module by default when building with maturin
 extension-module = ["pyo3/extension-module"]
@@ -96,6 +97,15 @@ name = "vectrill"
 required-features = ["cli"]
 
 # Benchmarks
+[[test]]
+name = "e2e_advanced_features"
+harness = false
+required-features = ["performance"]
+
+[[test]]
+name = "e2e_connectors_comprehensive"
+required-features = ["connectors-full"]
+
 [[bench]]
 name = "sequencer"
 harness = false

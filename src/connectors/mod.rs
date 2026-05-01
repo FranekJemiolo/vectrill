@@ -1,4 +1,4 @@
-//! Connector interface and implementations for data ingestion
+//! Connector interface and implementations for data ingestion and output
 
 use crate::{error::Result, RecordBatch};
 use arrow::datatypes::SchemaRef;
@@ -18,8 +18,23 @@ pub trait Connector: Send + Sync {
     fn name(&self) -> &str;
 }
 
+// Source connectors
 pub mod file;
 pub mod memory;
 
+// Sink connectors
+pub mod sink;
+pub mod file_sink;
+
+#[cfg(feature = "kafka")]
+pub mod kafka;
+
+// Source exports
 pub use file::FileConnector;
 pub use memory::MemoryConnector;
+
+// Sink exports
+pub use sink::{Sink, FileSink};
+
+#[cfg(feature = "kafka")]
+pub use kafka::KafkaSink;

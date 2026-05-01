@@ -1,0 +1,666 @@
+openapi: 3.0.3
+info:
+  title: Vectrill Spreadsheet API
+  description: API for integrating Vectrill data transformation capabilities with spreadsheet applications
+  version: 1.0.0
+  contact:
+    name: Vectrill Team
+    email: support@vectrill.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.vectrill.com/v1
+    description: Production server
+  - url: https://staging-api.vectrill.com/v1
+    description: Staging server
+  - url: http://localhost:8080/v1
+    description: Development server
+
+paths:
+  /spreadsheet/transform:
+    post:
+      summary: Transform spreadsheet data
+      description: Apply Vectrill transformations to spreadsheet data
+      operationId: transformData
+      tags:
+        - Transformations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransformRequest'
+            examples:
+              filter_example:
+                summary: Filter data example
+                value:
+                  request_id: "550e8400-e29b-41d4-a716-446655440000"
+                  operation: "transform"
+                  data:
+                    headers: ["Name", "Age", "City"]
+                    rows: [["Alice", "30", "New York"], ["Bob", "25", "Los Angeles"]]
+                    column_types: ["string", "number", "string"]
+                    range: "A1:C3"
+                    sheet_name: "Sheet1"
+                  transformation:
+                    type: "filter"
+                    column: "Age"
+                    parameters:
+                      operator: "greater_than"
+                      value: "25"
+                  output:
+                    format: "same"
+                    include_headers: true
+                    max_rows: 1000
+      responses:
+        '200':
+          description: Transformation successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransformResponse'
+              examples:
+                success_example:
+                  summary: Successful transformation
+                  value:
+                    request_id: "550e8400-e29b-41d4-a716-446655440000"
+                    success: true
+                    data:
+                      headers: ["Name", "Age", "City"]
+                      rows: [["Alice", "30", "New York"]]
+                      column_types: ["string", "number", "string"]
+                      range: "A1:C2"
+                      sheet_name: "Sheet1"
+                    metadata:
+                      input_rows: 2
+                      output_rows: 1
+                      columns: 3
+                      execution_time_ms: 45
+                      steps: ["filter"]
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /spreadsheet/validate:
+    post:
+      summary: Validate transformation configuration
+      description: Validate transformation configuration without applying it
+      operationId: validateTransformation
+      tags:
+        - Transformations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateRequest'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /spreadsheet/preview:
+    post:
+      summary: Preview transformation results
+      description: Apply transformation to a sample of data for preview
+      operationId: previewTransformation
+      tags:
+        - Transformations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreviewRequest'
+      responses:
+        '200':
+          description: Preview results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreviewResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /spreadsheet/templates:
+    get:
+      summary: Get available templates
+      description: Retrieve list of available transformation templates
+      operationId: getTemplates
+      tags:
+        - Templates
+      parameters:
+        - name: category
+          in: query
+          description: Filter templates by category
+          schema:
+            type: string
+            enum: [data-cleaning, data-analysis, data-transformation, data-filtering]
+        - name: limit
+          in: query
+          description: Maximum number of templates to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplatesResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /spreadsheet/transformations:
+    get:
+      summary: Get available transformations
+      description: Retrieve list of available transformation types
+      operationId: getTransformations
+      tags:
+        - Transformations
+      responses:
+        '200':
+          description: List of transformations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransformationsResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /spreadsheet/templates/{template_id}:
+    get:
+      summary: Get template details
+      description: Retrieve detailed information about a specific template
+      operationId: getTemplate
+      tags:
+        - Templates
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          description: Template identifier
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateResponse'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    TransformRequest:
+      type: object
+      required:
+        - request_id
+        - operation
+        - data
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Unique request identifier
+        operation:
+          type: string
+          enum: [transform]
+          description: Operation type
+        data:
+          $ref: '#/components/schemas/SpreadsheetData'
+        transformation:
+          $ref: '#/components/schemas/TransformationConfig'
+        output:
+          $ref: '#/components/schemas/OutputConfig'
+
+    TransformResponse:
+      type: object
+      required:
+        - request_id
+        - success
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Corresponding request ID
+        success:
+          type: boolean
+          description: Whether the transformation succeeded
+        data:
+          $ref: '#/components/schemas/SpreadsheetData'
+          description: Transformed data (if successful)
+        error:
+          type: string
+          description: Error message (if failed)
+        metadata:
+          $ref: '#/components/schemas/TransformationMetadata'
+
+    ValidateRequest:
+      type: object
+      required:
+        - request_id
+        - operation
+        - data
+        - transformation
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        operation:
+          type: string
+          enum: [validate]
+        data:
+          $ref: '#/components/schemas/SpreadsheetData'
+        transformation:
+          $ref: '#/components/schemas/TransformationConfig'
+
+    ValidateResponse:
+      type: object
+      required:
+        - request_id
+        - success
+        - is_valid
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        is_valid:
+          type: boolean
+        error:
+          type: string
+        warnings:
+          type: array
+          items:
+            type: string
+
+    PreviewRequest:
+      type: object
+      required:
+        - request_id
+        - operation
+        - data
+        - transformation
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        operation:
+          type: string
+          enum: [preview]
+        data:
+          $ref: '#/components/schemas/SpreadsheetData'
+        transformation:
+          $ref: '#/components/schemas/TransformationConfig'
+        output:
+          $ref: '#/components/schemas/OutputConfig'
+
+    PreviewResponse:
+      type: object
+      required:
+        - request_id
+        - success
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/SpreadsheetData'
+        error:
+          type: string
+        metadata:
+          $ref: '#/components/schemas/TransformationMetadata'
+
+    TemplatesResponse:
+      type: object
+      required:
+        - templates
+      properties:
+        templates:
+          type: array
+          items:
+            $ref: '#/components/schemas/TemplateSummary'
+        total:
+          type: integer
+          description: Total number of templates
+
+    TransformationsResponse:
+      type: object
+      required:
+        - transformations
+      properties:
+        transformations:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransformationSummary'
+
+    TemplateResponse:
+      type: object
+      required:
+        - template
+      properties:
+        template:
+          $ref: '#/components/schemas/Template'
+
+    SpreadsheetData:
+      type: object
+      required:
+        - headers
+        - rows
+        - column_types
+      properties:
+        headers:
+          type: array
+          items:
+            type: string
+          description: Column headers
+        rows:
+          type: array
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/CellValue'
+          description: Data rows
+        column_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataType'
+          description: Data types for each column
+        range:
+          type: string
+          description: Range reference (e.g., "A1:C100")
+        sheet_name:
+          type: string
+          description: Sheet name
+
+    CellValue:
+      oneOf:
+        - type: string
+          description: String value
+        - type: number
+          description: Numeric value
+        - type: boolean
+          description: Boolean value
+        - type: string
+          enum: [null]
+          description: Empty value
+
+    DataType:
+      type: string
+      enum: [string, number, boolean, date, empty]
+
+    TransformationConfig:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [filter, map, aggregate, sort, group_by, join, custom]
+        column:
+          type: string
+          description: Column to apply transformation to
+        parameters:
+          type: object
+          description: Transformation-specific parameters
+        output_column:
+          type: string
+          description: Output column name
+
+    OutputConfig:
+      type: object
+      required:
+        - format
+      properties:
+        format:
+          type: string
+          enum: [same, transpose, summary, pivot]
+        include_headers:
+          type: boolean
+          default: true
+        max_rows:
+          type: integer
+          description: Maximum number of rows to return
+
+    TransformationMetadata:
+      type: object
+      required:
+        - input_rows
+        - output_rows
+        - columns
+        - execution_time_ms
+        - steps
+      properties:
+        input_rows:
+          type: integer
+          description: Number of input rows
+        output_rows:
+          type: integer
+          description: Number of output rows
+        columns:
+          type: integer
+          description: Number of columns
+        execution_time_ms:
+          type: integer
+          description: Execution time in milliseconds
+        steps:
+          type: array
+          items:
+            type: string
+          description: Transformation steps applied
+
+    Template:
+      type: object
+      required:
+        - name
+        - description
+        - category
+        - steps
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [data-cleaning, data-analysis, data-transformation, data-filtering]
+        required_columns:
+          type: array
+          items:
+            type: string
+        optional_columns:
+          type: array
+          items:
+            type: string
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/TemplateStep'
+        parameters:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/TemplateParameter'
+
+    TemplateStep:
+      type: object
+      required:
+        - name
+        - transform_type
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        transform_type:
+          type: string
+        parameters:
+          type: object
+          description: Step parameters
+        required:
+          type: boolean
+          default: true
+
+    TemplateParameter:
+      type: object
+      required:
+        - name
+        - param_type
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        param_type:
+          type: string
+          enum: [string, number, boolean, column, column_list, operator, function]
+        default_value:
+          type: string
+        required:
+          type: boolean
+        validation:
+          type: string
+
+    TemplateSummary:
+      type: object
+      required:
+        - name
+        - description
+        - category
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        parameter_count:
+          type: integer
+
+    TransformationSummary:
+      type: object
+      required:
+        - name
+        - description
+        - parameters
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        parameters:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParameterDef'
+
+    ParameterDef:
+      type: object
+      required:
+        - name
+        - param_type
+        - required
+        - description
+      properties:
+        name:
+          type: string
+        param_type:
+          type: string
+        required:
+          type: boolean
+        description:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Error message
+        details:
+          type: object
+          description: Additional error details
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    OAuth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://accounts.google.com/o/oauth2/auth
+          tokenUrl: https://oauth2.googleapis.com/token
+          scopes:
+            https://www.googleapis.com/auth/spreadsheets: Read and write spreadsheets
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+  - OAuth2: []
+
+tags:
+  - name: Transformations
+    description: Data transformation operations
+  - name: Templates
+    description: Transformation templates
