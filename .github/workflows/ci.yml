@@ -118,6 +118,6 @@ jobs:
       - name: Run Python tests
         run: |
           # Use uv run to ensure proper environment with all dependencies
-          # Remove local python directory to ensure tests use installed package
-          rm -rf python
+          # Remove __init__.py from tests directory to prevent local import conflicts
+          find tests -name "__init__.py" -delete
           uv run pytest tests/python/ -v
