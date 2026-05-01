@@ -318,9 +318,7 @@ fn round_function(args: &[ArrayRef]) -> Result<ArrayRef> {
     let array = &args[0];
     let decimals = if args.len() == 2 {
         let dec_array = args[1].as_any().downcast_ref::<Int64Array>();
-        dec_array
-            .map(|arr| arr.value(0))
-            .unwrap_or(0)
+        dec_array.map(|arr| arr.value(0)).unwrap_or(0)
     } else {
         0
     };
