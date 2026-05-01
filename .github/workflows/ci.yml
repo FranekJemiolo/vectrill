@@ -85,15 +85,12 @@ jobs:
 
       - name: Build Python package
         run: maturin build --release
-        continue-on-error: true  # Python integration not ready yet
 
       - name: Install Python package
         run: pip install maturin[patchelf] && maturin develop
-        continue-on-error: true  # Python integration not ready yet
 
       - name: Install Python dependencies
         run: pip install pytest pytest-asyncio polars pyarrow
 
       - name: Run Python tests
         run: pytest tests/python/ -v
-        continue-on-error: true  # Python tests may not exist yet
