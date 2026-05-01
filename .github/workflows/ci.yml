@@ -104,7 +104,8 @@ jobs:
         run: |
           source .venv/bin/activate
           pip uninstall -y vectrill || true
-          pip install target/wheels/*.whl
+          # Install only the platform-specific wheel (not the generic one)
+          pip install target/wheels/vectrill-0.1.0-cp312-cp312-*.whl
 
       - name: Run Python tests
         run: |
