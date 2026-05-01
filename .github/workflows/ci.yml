@@ -96,27 +96,15 @@ jobs:
           # Verify pytest is available
           uv run python -c "import pytest; print('pytest available')"
 
-      - name: Build Python package
+      - name: Build and install Python package
         run: |
           source .venv/bin/activate
-          # Build platform-specific wheel with Python bindings
-          maturin build --release --features python --target x86_64-unknown-linux-gnu --out dist --skip-auditwheel
-
-      - name: Install Python package
-        run: |
-          source .venv/bin/activate
-          uv pip uninstall -y vectrill || true
-          # Install the built wheel from dist directory using uv pip
-          BUILT_WHEEL=$(find dist -name "vectrill-*-cp312-cp312-linux_x86_64.whl" | head -1)
-          # Install the built wheel if found, otherwise skip
-          if [ -n "$BUILT_WHEEL" ]; then
-            echo "Installing wheel: $BUILT_WHEEL"
-            # Inspect wheel contents to verify Rust modules are included
-            unzip -l "$BUILT_WHEEL" | grep -E "(vectrill|_rust)"
-            uv pip install "$BUILT_WHEEL"
-          else
-            echo "No built wheel found, skipping installation"
-          fi
+          # Use the same approach that worked locally
+          unset CONDA_PREFIX
+          uv run maturin develop --release --features python
+          # Verify the installation
+          echo "Installed package contents:"
+          find .venv/lib/python3.12/site-packages/vectrill* -name "*.so" -o -name "_rust" -type d | head -10
 
       - name: Run Python tests
         run: |
