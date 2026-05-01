@@ -121,7 +121,7 @@ jobs:
       - name: Run Python tests
         run: |
           # Use uv run to ensure proper environment with all dependencies
-          # Move to /app directory to avoid local import conflicts
-          mkdir -p /app && cd /app
+          # Move to temporary directory to avoid local import conflicts
+          cd /tmp
           cp -r /home/runner/work/vectrill/vectrill/tests ./tests
           uv run pytest tests/python/ -v
