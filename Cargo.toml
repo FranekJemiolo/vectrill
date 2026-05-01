@@ -44,7 +44,7 @@ serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 
 # Python bindings (for M2+)
-pyo3 = { version = "0.21", features = ["extension-module"], optional = true }
+pyo3 = { version = "0.24", features = ["extension-module"], optional = true }
 
 # Google Sheets dependencies (for Google Sheets integration)
 [target.'cfg(not(windows))'.dependencies]
