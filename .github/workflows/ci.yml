@@ -87,7 +87,7 @@ jobs:
         run: maturin build --release
 
       - name: Install Python package
-        run: pip install maturin[patchelf] && maturin develop
+        run: pip install .
 
       - name: Install Python dependencies
         run: pip install pytest pytest-asyncio polars pyarrow
