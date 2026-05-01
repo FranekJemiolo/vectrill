@@ -110,6 +110,9 @@ jobs:
           BUILT_WHEEL=$(find dist -name "vectrill-*-cp312-cp312-linux_x86_64.whl" | head -1)
           # Install the built wheel if found, otherwise skip
           if [ -n "$BUILT_WHEEL" ]; then
+            echo "Installing wheel: $BUILT_WHEEL"
+            # Inspect wheel contents to verify Rust modules are included
+            unzip -l "$BUILT_WHEEL" | grep -E "(vectrill|_rust)"
             uv pip install "$BUILT_WHEEL"
           else
             echo "No built wheel found, skipping installation"
