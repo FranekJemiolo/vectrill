@@ -20,7 +20,12 @@ class ColumnExpression:
     def over(self, window_spec) -> 'ColumnExpression':
         """Window function specification"""
         # For simplicity, just return a window expression
-        return WindowExpression(self, window_spec)
+        # Handle both WindowSpec objects and direct calls
+        if hasattr(window_spec, 'partition_by') or hasattr(window_spec, 'order_by'):
+            return WindowExpression(self, window_spec)
+        else:
+            # Handle direct calls like vectrill.window.partition_by('group').order_by('id')
+            return WindowExpression(self, window_spec)
     
     def __gt__(self, other: Any) -> dict:
         """Greater than comparison"""
@@ -225,7 +230,7 @@ class VectrillDataFrame:
                 default = parts[1].strip().strip("'\"")
                 if col_name in self._df.columns:
                     new_df = self._df.with_columns(
-                        pl.col(col_name).fill_null(default).alias(name)
+                        pl.coalesce([pl.col(col_name), pl.lit(default)]).alias(name)
                     )
                     return VectrillDataFrame(new_df)
         elif isinstance(expression, WindowExpression):
@@ -272,21 +277,34 @@ class VectrillDataFrame:
                 if len(self._df) > 0:
                     # Get condition and create conditional column
                     condition = expression.condition
-                    if isinstance(condition, dict) and condition.get("op") == "<":
-                        # Simple comparison condition
+                    if isinstance(condition, dict):
+                        op = condition.get("op")
                         col_name = condition.get("col")
                         value = condition.get("value")
-                        if col_name in self._df.columns:
-                            # Create conditional column: if col < value then expression.then_value else expression.otherwise_value
-                            condition_col = pl.col(col_name) < value
+                        
+                        if col_name in self._df.columns and op:
+                            condition_col = None
                             then_val = expression.then_value
                             else_val = expression.otherwise_value if expression.otherwise_value is not None else then_val
                             
-                            new_df = self._df.with_columns(
-                                pl.when(condition_col).then(then_val).otherwise(else_val).alias(name)
-                            )
-                            return VectrillDataFrame(new_df)
-                return VectrillDataFrame(new_df)
+                            # Create condition based on operator
+                            if op == "<":
+                                condition_col = pl.col(col_name) < value
+                            elif op == ">":
+                                condition_col = pl.col(col_name) > value
+                            elif op == "==":
+                                condition_col = pl.col(col_name) == value
+                            elif op == "!=":
+                                condition_col = pl.col(col_name) != value
+                            else:
+                                condition_col = pl.lit(True)  # Default to true
+                            
+                            if condition_col is not None:
+                                new_df = self._df.with_columns(
+                                    pl.when(condition_col).then(then_val).otherwise(else_val).alias(name)
+                                )
+                                return VectrillDataFrame(new_df)
+                    return VectrillDataFrame(self._df)
         
         # Fallback: create a placeholder column to avoid KeyError
         if len(self._df) > 0:
@@ -486,6 +504,21 @@ class WindowSpec:
         """Add order by to window spec"""
         self.order_by = columns
         return self
+    
+    def __call__(self, df):
+        """Make WindowSpec callable for window functions"""
+        # Apply window specification to DataFrame
+        if self.partition_by and self.order_by:
+            return df.over(
+                partition_by=self.partition_by,
+                order_by=self.order_by
+            )
+        elif self.partition_by:
+            return df.over(partition_by=self.partition_by)
+        elif self.order_by:
+            return df.over(order_by=self.order_by)
+        else:
+            return df
 
 
 # Create window module
