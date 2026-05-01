@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CounterType"],"fn":["global_counter_registry"],"static":["GLOBAL_COUNTER_REGISTRY"],"struct":["Counter","CounterRegistry","Timer"]};

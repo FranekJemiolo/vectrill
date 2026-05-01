@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AggFunction","LogicalPlan","WindowType"],"struct":["AggSpec","WindowSpec"]};

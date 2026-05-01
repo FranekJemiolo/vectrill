@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_global_metrics"],"static":["GLOBAL_METRICS"],"struct":["Histogram","MetricsRegistry"]};

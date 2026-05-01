@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["can_push_filter_through_map","modifies_column"],"struct":["ColumnPruningRule","FilterPushdownRule","MapFusionRule","Optimizer","ProjectionEliminationRule"],"trait":["OptimizerRule"]};

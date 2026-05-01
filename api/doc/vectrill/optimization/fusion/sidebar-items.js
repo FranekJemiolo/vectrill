@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_boundary","is_fusable","is_stateful","prune_columns","push_down_predicates"],"struct":["FusedExpr","FusedOperator","FusionSegment","FusionSegmentBuilder"],"trait":["FusableOperator"]};

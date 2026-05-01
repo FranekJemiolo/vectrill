@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["aggregation","filter","map","pipeline"],"struct":["PassThroughOperator"]};

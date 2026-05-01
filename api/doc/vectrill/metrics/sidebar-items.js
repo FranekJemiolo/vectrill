@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["MetricType","MetricValue"],"fn":["get_global_metrics","global_registry","init"],"mod":["registry","types"],"static":["GLOBAL_REGISTRY"],"struct":["Metric","MetricsRegistry"]};

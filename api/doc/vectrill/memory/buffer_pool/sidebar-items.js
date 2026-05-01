@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["global_buffer_pool"],"static":["GLOBAL_BUFFER_POOL"],"struct":["BufferPool","PoolStats"]};

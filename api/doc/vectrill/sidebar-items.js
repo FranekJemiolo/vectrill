@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["VERSION"],"mod":["connectors","error","expression","memory","metrics","operators","optimization","performance","planner","sequencer","streaming"],"struct":["RecordBatch"],"type":["SchemaRef"]};
