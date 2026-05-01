@@ -494,7 +494,11 @@ impl RealTimeProcessor {
     }
 
     /// Update pipeline status
-    pub fn update_pipeline_status(&mut self, pipeline_id: &str, status: PipelineStatus) -> Result<()> {
+    pub fn update_pipeline_status(
+        &mut self,
+        pipeline_id: &str,
+        status: PipelineStatus,
+    ) -> Result<()> {
         if let Some(pipeline) = self.pipelines.get_mut(pipeline_id) {
             pipeline.status = status.clone();
             pipeline.updated_at = std::time::SystemTime::now();
@@ -516,7 +520,10 @@ impl RealTimeProcessor {
             println!("Pipeline status update: {:?}", update);
             Ok(())
         } else {
-            Err(VectrillError::InvalidConfig(format!("Pipeline '{}' not found", pipeline_id)))
+            Err(VectrillError::InvalidConfig(format!(
+                "Pipeline '{}' not found",
+                pipeline_id
+            )))
         }
     }
 }
@@ -589,7 +596,9 @@ mod tests {
         let mut processor = RealTimeProcessor::new(config);
 
         let pipeline_id = processor.create_pipeline("Test Pipeline", vec![]);
-        processor.update_pipeline_status(&pipeline_id, PipelineStatus::Running).unwrap();
+        processor
+            .update_pipeline_status(&pipeline_id, PipelineStatus::Running)
+            .unwrap();
 
         let pipeline = processor.get_pipeline(&pipeline_id).unwrap();
         assert!(matches!(pipeline.status, PipelineStatus::Running));
