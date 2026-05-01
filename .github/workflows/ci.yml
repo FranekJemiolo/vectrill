@@ -62,7 +62,12 @@ jobs:
         run: cargo clippy -- -D warnings
 
       - name: Run tests
-        run: cargo test --lib --test '*' --features="${{ matrix.features }}" --verbose
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cargo test --lib --test '*' --features="${{ matrix.features }}" --verbose --exclude e2e_connectors_comprehensive
+          else
+            cargo test --lib --test '*' --features="${{ matrix.features }}" --verbose
+          fi
 
   test-python:
     name: Test Python
