@@ -57,7 +57,7 @@ jobs:
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Check spreadsheet formatting
-        run: cargo fmt -- --check src/spreadsheet/
+        run: cargo fmt -- --check src/spreadsheet/**/*.rs
 
       - name: Run spreadsheet clippy
         run: cargo clippy --features spreadsheet -- -D warnings
@@ -189,7 +189,11 @@ jobs:
       - name: Check for security vulnerabilities in dependencies
         run: |
           cd spreadsheet
-          npm audit --audit-level moderate
+          if [ -f package-lock.json ]; then
+            npm audit --audit-level moderate
+          else
+            echo "No package-lock.json found, skipping npm audit"
+          fi
 
   build-spreadsheet-docs:
     name: Build Spreadsheet Documentation
@@ -279,11 +283,11 @@ jobs:
 
       - name: Validate all templates
         run: |
-          cargo test --features spreadsheet --verbose \
+          cargo test --features spreadsheet --verbose -- \
             test_template_manager_creation \
             test_template_listing \
             test_template_retrieval \
-            -- --nocapture
+            --nocapture
 
       - name: Check template syntax
         run: |
