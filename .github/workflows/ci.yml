@@ -93,6 +93,8 @@ jobs:
           source .venv/bin/activate
           # Install all dependencies using uv sync (includes dev dependencies)
           uv sync --dev
+          # Verify pytest is available
+          uv run python -c "import pytest; print('pytest available')"
 
       - name: Build Python package
         run: |
