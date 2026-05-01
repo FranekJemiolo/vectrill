@@ -68,6 +68,7 @@ jobs:
           else
             cargo test --lib --test '*' --features="${{ matrix.features }}" --verbose
           fi
+        shell: bash
 
   test-python:
     name: Test Python
