@@ -8,6 +8,9 @@ pub mod data_bridge;
 pub mod templates;
 pub mod utils;
 
+#[cfg(windows)]
+pub mod excel_addin;
+
 // Re-export main components
 pub use api::{
     DataType, OperationType, SpreadsheetAPI, SpreadsheetData, SpreadsheetRequest,

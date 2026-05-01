@@ -43,6 +43,12 @@ chrono = { version = "0.4", features = ["serde"] }
 # Python bindings (for M2+)
 pyo3 = { version = "0.21", features = ["extension-module"], optional = true }
 
+# Windows COM dependencies (for Excel add-in)
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Ole", "Win32_UI_WindowsAndMessaging"] }
+widestring = "1.0"
+reqwest = { version = "0.11", features = ["blocking", "json"] }
+
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -95,6 +101,9 @@ extension-module = ["pyo3/extension-module"]
 [[bin]]
 name = "vectrill"
 required-features = ["cli"]
+
+# Build script
+build = "spreadsheet/src/build.rs"
 
 # Benchmarks
 [[test]]
