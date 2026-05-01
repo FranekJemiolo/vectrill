@@ -93,8 +93,8 @@ jobs:
           source .venv/bin/activate
           # Install main dependencies
           uv sync
-          # Install dev dependencies explicitly using --group
-          uv sync --group dev
+          # Install pytest and other dev dependencies directly
+          uv add --dev pytest pytest-asyncio pandas black ruff mypy yamllint hypothesis
           # Verify pytest is available
           uv run python -c "import pytest; print('pytest available')"
 
