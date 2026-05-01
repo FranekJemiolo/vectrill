@@ -54,7 +54,7 @@ jobs:
         run: cargo clippy -- -D warnings
 
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo test --lib --test '*' --verbose
 
   test-python:
     name: Test Python
