@@ -112,7 +112,7 @@ impl Operator for AggregateOperator {
             state
                 .groups
                 .entry(group_key)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .extend(arrow_batch.columns().iter().cloned());
         }
 

@@ -307,7 +307,7 @@ fn ceil_function(args: &[ArrayRef]) -> Result<ArrayRef> {
 fn round_function(args: &[ArrayRef]) -> Result<ArrayRef> {
     use arrow::array::{Float64Array, Int64Array};
 
-    if args.len() < 1 || args.len() > 2 {
+    if args.is_empty() || args.len() > 2 {
         return Err(ExpressionError::InvalidArgumentCount {
             function: "round".to_string(),
             expected: 1,
@@ -319,13 +319,7 @@ fn round_function(args: &[ArrayRef]) -> Result<ArrayRef> {
     let decimals = if args.len() == 2 {
         let dec_array = args[1].as_any().downcast_ref::<Int64Array>();
         dec_array
-            .and_then(|arr| {
-                if arr.len() > 0 {
-                    Some(arr.value(0))
-                } else {
-                    Some(0)
-                }
-            })
+            .map(|arr| arr.value(0))
             .unwrap_or(0)
     } else {
         0
@@ -618,7 +612,7 @@ fn avg_function(args: &[ArrayRef]) -> Result<ArrayRef> {
     let array = &args[0];
 
     if let Some(floats) = array.as_any().downcast_ref::<Float64Array>() {
-        let values: Vec<f64> = floats.iter().filter_map(|v| v).collect();
+        let values: Vec<f64> = floats.iter().flatten().collect();
         let avg = if values.is_empty() {
             0.0
         } else {
@@ -626,7 +620,7 @@ fn avg_function(args: &[ArrayRef]) -> Result<ArrayRef> {
         };
         Ok(Arc::new(Float64Array::from(vec![avg])))
     } else if let Some(ints) = array.as_any().downcast_ref::<Int64Array>() {
-        let values: Vec<i64> = ints.iter().filter_map(|v| v).collect();
+        let values: Vec<i64> = ints.iter().flatten().collect();
         let avg = if values.is_empty() {
             0.0
         } else {
@@ -654,11 +648,11 @@ fn min_function(args: &[ArrayRef]) -> Result<ArrayRef> {
     if let Some(floats) = array.as_any().downcast_ref::<Float64Array>() {
         let min = floats
             .iter()
-            .filter_map(|v| v)
+            .flatten()
             .min_by(|a, b| a.partial_cmp(b).unwrap());
         Ok(Arc::new(Float64Array::from(vec![min.unwrap_or(0.0)])))
     } else if let Some(ints) = array.as_any().downcast_ref::<Int64Array>() {
-        let min = ints.iter().filter_map(|v| v).min();
+        let min = ints.iter().flatten().min();
         Ok(Arc::new(Int64Array::from(vec![min.unwrap_or(0)])))
     } else {
         Ok(array.clone())
@@ -681,11 +675,11 @@ fn max_function(args: &[ArrayRef]) -> Result<ArrayRef> {
     if let Some(floats) = array.as_any().downcast_ref::<Float64Array>() {
         let max = floats
             .iter()
-            .filter_map(|v| v)
+            .flatten()
             .max_by(|a, b| a.partial_cmp(b).unwrap());
         Ok(Arc::new(Float64Array::from(vec![max.unwrap_or(0.0)])))
     } else if let Some(ints) = array.as_any().downcast_ref::<Int64Array>() {
-        let max = ints.iter().filter_map(|v| v).max();
+        let max = ints.iter().flatten().max();
         Ok(Arc::new(Int64Array::from(vec![max.unwrap_or(0)])))
     } else {
         Ok(array.clone())
