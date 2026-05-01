@@ -420,7 +420,7 @@ mod tests {
 
         // Should combine filters
         match result {
-            LogicalPlan::Filter { input, expr } => {
+            LogicalPlan::Filter { input, expr: _ } => {
                 match *input {
                     LogicalPlan::Source { .. } => {
                         // Filter should be pushed to source
@@ -455,7 +455,7 @@ mod tests {
 
         // Should fuse maps
         match result {
-            LogicalPlan::Map { input, expr } => {
+            LogicalPlan::Map { input, expr: _ } => {
                 match *input {
                     LogicalPlan::Source { .. } => {
                         // Should be fused to single map

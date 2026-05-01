@@ -363,7 +363,6 @@ impl std::fmt::Display for WindowSpec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expression::Expr;
     use std::collections::HashMap;
 
     #[test]

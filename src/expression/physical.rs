@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use thiserror::Error;
 
-use super::{Expr, Operator, ScalarValue, UnaryOp};
+use super::{Expr, Operator, ScalarValue, UnaryOp, global_registry};
 use arrow::array::Int64Array;
 
 /// Expression evaluation errors
@@ -596,32 +596,31 @@ impl PhysicalExpr for FunctionExpr {
         let arg_arrays: Result<Vec<_>> = self.args.iter().map(|arg| arg.evaluate(batch)).collect();
         let arg_arrays = arg_arrays?;
 
-        // For now, implement a few basic functions with simplified implementations
-        match self.name.as_str() {
-            "abs" => {
-                if arg_arrays.len() != 1 {
+        // Use the global function registry to look up and execute the function
+        if let Some((func, metadata)) = global_registry().get_function(&self.name) {
+            // Validate argument count
+            if !metadata.variadic {
+                if arg_arrays.len() < metadata.min_args || arg_arrays.len() > metadata.max_args {
                     return Err(ExpressionError::InvalidArgumentCount {
                         function: self.name.clone(),
-                        expected: 1,
+                        expected: metadata.min_args,
                         actual: arg_arrays.len(),
                     });
                 }
-                // Simplified implementation
-                Ok(arg_arrays[0].clone())
-            }
-            "length" => {
-                if arg_arrays.len() != 1 {
+            } else {
+                if arg_arrays.len() < metadata.min_args {
                     return Err(ExpressionError::InvalidArgumentCount {
                         function: self.name.clone(),
-                        expected: 1,
+                        expected: metadata.min_args,
                         actual: arg_arrays.len(),
                     });
                 }
-                // Simplified implementation - return length as int64 array
-                let len = arg_arrays[0].len() as i64;
-                Ok(Arc::new(arrow::array::Int64Array::from(vec![len])))
             }
-            _ => Err(ExpressionError::FunctionNotFound(self.name.clone())),
+
+            // Execute the function
+            func(&arg_arrays)
+        } else {
+            Err(ExpressionError::FunctionNotFound(self.name.clone()))
         }
     }
 
