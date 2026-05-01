@@ -1,12 +1,10 @@
 # Vectrill Spreadsheet Integration
 
-This directory contains the complete implementation of Vectrill's spreadsheet integration, enabling seamless data transformation capabilities in Microsoft Excel and Google Sheets.
+This document provides comprehensive information about the Vectrill spreadsheet integration, including Excel COM add-in, Google Sheets integration, and real-time processing capabilities.
 
-## Project Structure
+## Overview
 
-```
-spreadsheet/
-├── README.md                    # This file
+The Vectrill spreadsheet integration enables users to access Vectrill's high-performance data processing capabilities directly from their favorite spreadsheet applications. This integration supports:
 ├── api/                         # Core API implementation
 │   ├── rest/                   # REST API endpoints
 │   ├── auth/                   # Authentication middleware

@@ -11,6 +11,11 @@ pub mod utils;
 #[cfg(windows)]
 pub mod excel_addin;
 
+#[cfg(not(windows))]
+pub mod google_sheets;
+
+pub mod real_time;
+
 // Re-export main components
 pub use api::{
     DataType, OperationType, SpreadsheetAPI, SpreadsheetData, SpreadsheetRequest,
