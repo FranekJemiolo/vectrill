@@ -9,6 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   test-rust:
@@ -88,17 +89,23 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          uv pip install --upgrade pip setuptools wheel
+          uv venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip setuptools wheel
+          pip install cffi
           uv sync --dev
 
-      - name: Install cffi for build
-        run: uv pip install cffi
-
       - name: Build Python package
-        run: uv run maturin build --release --features python
+        run: |
+          source .venv/bin/activate
+          maturin build --release --features python
 
       - name: Install Python package
-        run: uv pip install target/wheels/*.whl
+        run: |
+          source .venv/bin/activate
+          pip install target/wheels/*.whl
 
       - name: Run Python tests
-        run: uv run pytest tests/python/ -v
+        run: |
+          source .venv/bin/activate
+          pytest tests/python/ -v
