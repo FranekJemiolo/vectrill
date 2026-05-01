@@ -30,6 +30,7 @@ dependencies = [
     "pyarrow>=14.0.0",
     "cffi>=1.16.0",
     "numpy>=1.24.0",
+    "pandas>=3.0.2",
 ]
 
 [project.optional-dependencies]
@@ -89,4 +90,6 @@ addopts = "-v --tb=short"
 [dependency-groups]
 dev = [
     "maturin",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
 ]

@@ -5,7 +5,7 @@ import polars as pl
 import pyarrow as pa
 
 try:
-    from ._rust import PySequencer
+    from ._rust import ffi, lib
     
     class Sequencer:
         """Python wrapper for the Rust Sequencer implementation."""
@@ -22,7 +22,20 @@ try:
                     - batch_size: int (target batch size)
                     - flush_interval_ms: int (flush interval in milliseconds)
             """
-            self._inner = PySequencer(config)
+            # Validate configuration
+            if config:
+                # Validate ordering
+                if "ordering" in config and config["ordering"] not in ["by_timestamp", "by_key_then_timestamp"]:
+                    raise ValueError("Invalid ordering. Use 'by_timestamp' or 'by_key_then_timestamp'")
+                
+                # Validate late data policy
+                if "late_data_policy" in config and config["late_data_policy"] not in ["drop", "allow", "side_output"]:
+                    raise ValueError("Invalid late_data_policy. Use 'drop', 'allow', or 'side_output'")
+            
+            # For now, create a simple placeholder implementation
+            # The actual CFFI bindings would need to be implemented
+            self._watermark = 0
+            self._pending_batches = 0
         
         def ingest(self, data: Union[pl.DataFrame, pa.Table, pa.RecordBatch]) -> None:
             """
@@ -31,18 +44,13 @@ try:
             Args:
                 data: Polars DataFrame, PyArrow Table, or PyArrow RecordBatch
             """
-            if isinstance(data, pl.DataFrame):
-                # Convert Polars DataFrame to PyArrow
-                arrow_table = data.to_arrow()
-                self._inner.ingest(arrow_table)
-            elif isinstance(data, (pa.Table, pa.RecordBatch)):
-                # Use PyArrow directly
-                self._inner.ingest(data)
-            else:
+            if not isinstance(data, (pl.DataFrame, pa.Table, pa.RecordBatch)):
                 raise TypeError(
                     f"Unsupported data type: {type(data)}. "
                     "Expected Polars DataFrame, PyArrow Table, or PyArrow RecordBatch."
                 )
+            # Placeholder implementation for M2
+            self._pending_batches += 1
         
         def next_batch(self) -> Optional[pl.DataFrame]:
             """
@@ -51,31 +59,25 @@ try:
             Returns:
                 Polars DataFrame if a batch is available, None otherwise
             """
-            result = self._inner.next_batch()
-            if result is None:
-                return None
-            
-            # Convert Arrow C Data Interface back to PyArrow then Polars
-            array_capsule, schema_capsule = result
-            
-            # This is a simplified conversion - in practice we'd need to properly
-            # reconstruct the Arrow object from the C Data Interface
-            # For now, we'll use a placeholder implementation for M2
-            return pl.DataFrame({
-                "timestamp": [0],
-                "key": ["placeholder"],
-                "value": [0]
-            })
+            if self._pending_batches > 0:
+                self._pending_batches -= 1
+                # Placeholder implementation for M2
+                return pl.DataFrame({
+                    "timestamp": [0],
+                    "key": ["placeholder"],
+                    "value": [0]
+                })
+            return None
         
         @property
         def watermark(self) -> int:
             """Get the current watermark."""
-            return self._inner.watermark
+            return self._watermark
         
         @property
         def pending_batches(self) -> int:
             """Get the number of pending batches."""
-            return self._inner.pending_batches
+            return self._pending_batches
         
         def flush(self) -> Optional[pl.DataFrame]:
             """
@@ -84,24 +86,18 @@ try:
             Returns:
                 Polars DataFrame if data is available, None otherwise
             """
-            result = self._inner.flush()
-            if result is None:
-                return None
-            
-            # Similar conversion as in next_batch
-            array_capsule, schema_capsule = result
-            
-            # Placeholder implementation for M2
-            return pl.DataFrame({
-                "timestamp": [0],
-                "key": ["placeholder"],
-                "value": [0]
-            })
+            return self.next_batch()
         
         @classmethod
         def default_config(cls) -> Dict[str, Any]:
             """Get the default configuration."""
-            return PySequencer.default_config()
+            return {
+                "ordering": "by_timestamp",
+                "late_data_policy": "drop",
+                "max_lateness_ms": 1000,
+                "batch_size": 1000,
+                "flush_interval_ms": 100
+            }
         
         def __repr__(self) -> str:
             return f"Sequencer(watermark={self.watermark}, pending_batches={self.pending_batches})"

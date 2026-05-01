@@ -31,7 +31,7 @@ class TestBasicOperations:
             'id': range(1000),
             'value': np.random.randn(1000) * 100,
             'category': np.random.choice(['A', 'B', 'C'], 1000),
-            'timestamp': pd.date_range('2023-01-01', periods=1000, freq='H'),
+            'timestamp': pd.date_range('2023-01-01', periods=1000, freq='h'),
             'flag': np.random.choice([True, False], 1000)
         })
     
