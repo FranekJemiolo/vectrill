@@ -94,16 +94,16 @@ extension-module = ["pyo3/extension-module"]
 name = "vectrill"
 required-features = ["cli"]
 
-# Benchmarks - temporarily disabled due to API mismatches
-# [[bench]]
-# name = "sequencer"
-# harness = false
-# required-features = ["performance"]
+# Benchmarks
+[[bench]]
+name = "sequencer"
+harness = false
+required-features = ["performance"]
 
-# [[bench]]
-# name = "operators"
-# harness = false
-# required-features = ["performance"]
+[[bench]]
+name = "operators"
+harness = false
+required-features = ["performance"]
 
 [profile.release]
 opt-level = 3
