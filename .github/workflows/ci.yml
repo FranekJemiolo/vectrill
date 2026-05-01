@@ -105,12 +105,12 @@ jobs:
       - name: Install Python package
         run: |
           source .venv/bin/activate
-          pip uninstall -y vectrill || true
-          # Install the built wheel from dist directory
+          uv pip uninstall -y vectrill || true
+          # Install the built wheel from dist directory using uv pip
           BUILT_WHEEL=$(find dist -name "vectrill-*-cp312-cp312-linux_x86_64.whl" | head -1)
           # Install the built wheel if found, otherwise skip
           if [ -n "$BUILT_WHEEL" ]; then
-            pip install "$BUILT_WHEEL"
+            uv pip install "$BUILT_WHEEL"
           else
             echo "No built wheel found, skipping installation"
           fi
