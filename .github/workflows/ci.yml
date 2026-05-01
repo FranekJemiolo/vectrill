@@ -103,7 +103,7 @@ jobs:
       - name: Install Python package
         run: |
           source .venv/bin/activate
-          pip install target/wheels/*.whl
+          pip install --force-reinstall --no-deps target/wheels/*.whl
 
       - name: Run Python tests
         run: |
