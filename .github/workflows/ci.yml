@@ -91,10 +91,8 @@ jobs:
         run: |
           uv venv .venv
           source .venv/bin/activate
-          # Install main dependencies
-          uv sync
-          # Install pytest and other dev dependencies directly
-          uv add --dev pytest pytest-asyncio pandas black ruff mypy yamllint hypothesis
+          # Install all dependencies including all optional dependencies
+          uv sync --all-extras
           # Verify pytest is available
           uv run python -c "import pytest; print('pytest available')"
 
@@ -108,13 +106,13 @@ jobs:
         run: |
           source .venv/bin/activate
           pip uninstall -y vectrill || true
-          # Install only the platform-specific wheel
-          PLATFORM_WHEEL=$(find target/wheels -name "vectrill-*-manylinux_2_34_x86_64.whl" | head -1)
-          # Install the platform-specific wheel if found, otherwise skip
-          if [ -n "$PLATFORM_WHEEL" ]; then
-            pip install "$PLATFORM_WHEEL"
+          # Install the built wheel from dist directory
+          BUILT_WHEEL=$(find dist -name "vectrill-*-cp312-cp312-linux_x86_64.whl" | head -1)
+          # Install the built wheel if found, otherwise skip
+          if [ -n "$BUILT_WHEEL" ]; then
+            pip install "$BUILT_WHEEL"
           else
-            echo "No platform-specific wheel found, skipping installation"
+            echo "No built wheel found, skipping installation"
           fi
 
       - name: Run Python tests
