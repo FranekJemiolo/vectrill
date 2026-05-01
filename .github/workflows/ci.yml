@@ -54,7 +54,7 @@ jobs:
         run: cargo clippy -- -D warnings
 
       - name: Run tests
-        run: cargo test --lib --test '*' --verbose
+        run: cargo test --lib --test '*' --features="performance connectors-full" --verbose
 
   test-python:
     name: Test Python
