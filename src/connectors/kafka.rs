@@ -1,13 +1,21 @@
 //! Kafka connector for streaming data output to Kafka topics
 
+#[cfg(feature = "kafka")]
 use crate::{error::Result, RecordBatch, VectrillError};
+#[cfg(feature = "kafka")]
 use arrow::datatypes::SchemaRef;
+#[cfg(feature = "kafka")]
 use arrow::record_batch::RecordBatch as ArrowRecordBatch;
+#[cfg(feature = "kafka")]
 use rdkafka::config::ClientConfig;
+#[cfg(feature = "kafka")]
 use rdkafka::producer::{FutureProducer, FutureRecord};
+#[cfg(feature = "kafka")]
 use rdkafka::util::Timeout;
+#[cfg(feature = "kafka")]
 use std::time::Duration;
 
+#[cfg(feature = "kafka")]
 /// Kafka serialization format
 #[derive(Debug, Clone, Copy)]
 pub enum KafkaFormat {
@@ -16,6 +24,7 @@ pub enum KafkaFormat {
     Csv,
 }
 
+#[cfg(feature = "kafka")]
 /// Kafka connector for streaming data to Kafka topics
 pub struct KafkaSink {
     producer: FutureProducer,
@@ -25,6 +34,7 @@ pub struct KafkaSink {
     timeout: Duration,
 }
 
+#[cfg(feature = "kafka")]
 impl KafkaSink {
     /// Create a new Kafka sink
     pub fn new(
@@ -86,6 +96,7 @@ impl KafkaSink {
             {
                 Ok((partition, offset)) => {
                     // Successfully delivered
+                    #[cfg(feature = "kafka")]
                     tracing::debug!(
                         "Message delivered to topic: {}, partition: {}, offset: {}",
                         self.topic,
@@ -107,6 +118,7 @@ impl KafkaSink {
 
     /// Serialize a single row as JSON
     fn serialize_row_as_json(&self, batch: &ArrowRecordBatch, row_idx: usize) -> Result<Vec<u8>> {
+        #[cfg(feature = "kafka")]
         use serde_json::{Map, Value};
 
         let mut map = Map::new();
@@ -152,7 +164,9 @@ impl KafkaSink {
         array: &dyn arrow::array::Array,
         row_idx: usize,
     ) -> Result<serde_json::Value> {
+        #[cfg(feature = "kafka")]
         use arrow::array::*;
+        #[cfg(feature = "kafka")]
         use arrow::datatypes::DataType;
 
         let data_type = array.data_type();
@@ -343,7 +357,7 @@ impl KafkaSink {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "kafka"))]
 mod tests {
     use super::*;
     use arrow::datatypes::{DataType, Field, Schema};

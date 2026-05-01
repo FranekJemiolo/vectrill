@@ -176,6 +176,6 @@ fn main() {
     test_global_counter_registry();
     test_expression_optimization_boolean_folding();
     test_expression_optimization_unary_negation();
-    
+
     println!("✅ All advanced features tests passed!");
 }

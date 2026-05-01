@@ -4,13 +4,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 
+use vectrill::connectors::file_sink::FileSinkFormat;
 #[cfg(feature = "kafka")]
 use vectrill::connectors::kafka::KafkaFormat;
 #[cfg(feature = "kafka")]
 use vectrill::connectors::sink::{FileSink, KafkaSink, Sink};
 #[cfg(not(feature = "kafka"))]
 use vectrill::connectors::sink::{FileSink, Sink};
-use vectrill::connectors::file_sink::FileSinkFormat;
 use vectrill::connectors::{Connector, FileConnector, MemoryConnector};
 use vectrill::{RecordBatch, VectrillError};
 

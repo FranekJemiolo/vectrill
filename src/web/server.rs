@@ -1,18 +1,28 @@
 //! Web server implementation using Axum
 
 use crate::metrics::MetricsRegistry;
-use crate::spreadsheet::api::{SpreadsheetRequest, SpreadsheetResponse, OperationType};
+use serde::Serialize;
+use std::sync::Arc;
+
+#[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
 use axum::{
     extract::{ws::Message, Path, State, WebSocketUpgrade},
     response::{Html, IntoResponse, Json},
     routing::{get, post},
     Router,
 };
+
+#[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
 use futures::stream::StreamExt;
-use serde::Serialize;
-use std::sync::Arc;
+
+#[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
 use tokio::time::{interval, Duration};
+
+#[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
 use tower_http::cors::{Any, CorsLayer};
+
+#[cfg(feature = "spreadsheet")]
+use crate::spreadsheet::api::{OperationType, SpreadsheetRequest, SpreadsheetResponse};
 
 /// Metrics response
 #[derive(Debug, Serialize)]
@@ -52,20 +62,31 @@ struct JobInfo {
 }
 
 /// Create the web router
+#[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
 pub fn create_router(registry: Arc<MetricsRegistry>) -> Router {
-    Router::new()
+    let mut router = Router::new()
         .route("/", get(dashboard))
         .route("/health", get(health_check))
         .route("/api/metrics", get(get_metrics))
         .route("/api/jobs", get(list_jobs))
         .route("/api/jobs/:id", get(get_job_detail))
-        .route("/ws/metrics", get(metrics_websocket))
-        // Spreadsheet API endpoints
-        .route("/api/v1/spreadsheet/transform", post(spreadsheet_transform))
-        .route("/api/v1/spreadsheet/validate", post(spreadsheet_validate))
-        .route("/api/v1/spreadsheet/preview", post(spreadsheet_preview))
-        .route("/api/v1/spreadsheet/templates", get(spreadsheet_templates))
-        .route("/api/v1/spreadsheet/transformations", get(spreadsheet_transformations))
+        .route("/ws/metrics", get(metrics_websocket));
+
+    // Add spreadsheet API endpoints if spreadsheet feature is enabled
+    #[cfg(feature = "spreadsheet")]
+    {
+        router = router
+            .route("/api/v1/spreadsheet/transform", post(spreadsheet_transform))
+            .route("/api/v1/spreadsheet/validate", post(spreadsheet_validate))
+            .route("/api/v1/spreadsheet/preview", post(spreadsheet_preview))
+            .route("/api/v1/spreadsheet/templates", get(spreadsheet_templates))
+            .route(
+                "/api/v1/spreadsheet/transformations",
+                get(spreadsheet_transformations),
+            );
+    }
+
+    router
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -76,11 +97,13 @@ pub fn create_router(registry: Arc<MetricsRegistry>) -> Router {
 }
 
 /// Dashboard endpoint
+#[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
 async fn dashboard() -> Html<&'static str> {
     Html(include_str!("static/index.html"))
 }
 
 /// Health check endpoint
+#[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
 async fn health_check() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "healthy".to_string(),
@@ -89,17 +112,20 @@ async fn health_check() -> Json<HealthResponse> {
 }
 
 /// Get metrics endpoint
+#[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
 async fn get_metrics(State(registry): State<Arc<MetricsRegistry>>) -> Json<MetricsResponse> {
     let metrics = registry.get_metrics().await;
     Json(MetricsResponse { metrics })
 }
 
 /// List jobs endpoint (placeholder)
+#[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
 async fn list_jobs() -> Json<Vec<JobInfo>> {
     Json(vec![])
 }
 
 /// Get job detail endpoint (placeholder)
+#[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
 async fn get_job_detail(Path(id): Path<String>) -> Json<JobDetail> {
     Json(JobDetail {
         id,
@@ -122,6 +148,7 @@ async fn get_job_detail(Path(id): Path<String>) -> Json<JobDetail> {
 }
 
 /// WebSocket endpoint for real-time metrics streaming
+#[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
 async fn metrics_websocket(
     ws: WebSocketUpgrade,
     State(registry): State<Arc<MetricsRegistry>>,
@@ -129,6 +156,7 @@ async fn metrics_websocket(
     ws.on_upgrade(move |socket| handle_metrics_websocket(socket, registry))
 }
 
+#[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
 async fn handle_metrics_websocket(
     mut socket: axum::extract::ws::WebSocket,
     registry: Arc<MetricsRegistry>,
@@ -163,6 +191,7 @@ async fn handle_metrics_websocket(
 }
 
 /// Spreadsheet transform endpoint
+#[cfg(feature = "spreadsheet")]
 async fn spreadsheet_transform(
     Json(request): Json<SpreadsheetRequest>,
 ) -> Json<SpreadsheetResponse> {
@@ -177,6 +206,7 @@ async fn spreadsheet_transform(
 }
 
 /// Spreadsheet validate endpoint
+#[cfg(feature = "spreadsheet")]
 async fn spreadsheet_validate(
     Json(request): Json<SpreadsheetRequest>,
 ) -> Json<SpreadsheetResponse> {
@@ -191,9 +221,8 @@ async fn spreadsheet_validate(
 }
 
 /// Spreadsheet preview endpoint
-async fn spreadsheet_preview(
-    Json(request): Json<SpreadsheetRequest>,
-) -> Json<SpreadsheetResponse> {
+#[cfg(feature = "spreadsheet")]
+async fn spreadsheet_preview(Json(request): Json<SpreadsheetRequest>) -> Json<SpreadsheetResponse> {
     // For now, return preview of data
     Json(SpreadsheetResponse {
         request_id: request.request_id.clone(),
@@ -205,6 +234,7 @@ async fn spreadsheet_preview(
 }
 
 /// Spreadsheet templates endpoint
+#[cfg(feature = "spreadsheet")]
 async fn spreadsheet_templates() -> Json<serde_json::Value> {
     // For now, return mock templates
     Json(serde_json::json!({
@@ -224,6 +254,7 @@ async fn spreadsheet_templates() -> Json<serde_json::Value> {
 }
 
 /// Spreadsheet transformations endpoint
+#[cfg(feature = "spreadsheet")]
 async fn spreadsheet_transformations() -> Json<serde_json::Value> {
     // For now, return available transformations
     Json(serde_json::json!({
@@ -248,6 +279,7 @@ async fn spreadsheet_transformations() -> Json<serde_json::Value> {
 }
 
 /// Run the web server
+#[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
 pub async fn run_server(
     addr: &str,
     registry: Arc<MetricsRegistry>,
@@ -256,6 +288,9 @@ pub async fn run_server(
     let listener = tokio::net::TcpListener::bind(addr).await?;
     println!("Web server listening on {}", addr);
 
-    axum::serve(listener, app).await?;
+    #[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
+    {
+        axum::serve(listener, app).await?;
+    }
     Ok(())
 }
