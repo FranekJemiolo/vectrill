@@ -57,7 +57,7 @@ jobs:
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Check spreadsheet formatting
-        run: cargo fmt -- --check src/spreadsheet/
+        run: cargo fmt -- --check src/spreadsheet/*.rs
 
       - name: Run spreadsheet clippy
         run: cargo clippy --features spreadsheet -- -D warnings
