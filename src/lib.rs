@@ -25,7 +25,7 @@ pub mod ffi;
 #[cfg(feature = "spreadsheet")]
 pub mod spreadsheet;
 pub mod transformations;
-#[cfg(feature = "web-ui")]
+#[cfg(any(feature = "web-ui", feature = "spreadsheet"))]
 pub mod web;
 
 pub use arrow::datatypes::SchemaRef;

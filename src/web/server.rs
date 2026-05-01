@@ -1,10 +1,11 @@
 //! Web server implementation using Axum
 
 use crate::metrics::MetricsRegistry;
+use crate::spreadsheet::api::{SpreadsheetRequest, SpreadsheetResponse, OperationType};
 use axum::{
     extract::{ws::Message, Path, State, WebSocketUpgrade},
     response::{Html, IntoResponse, Json},
-    routing::get,
+    routing::{get, post},
     Router,
 };
 use futures::stream::StreamExt;
@@ -59,6 +60,12 @@ pub fn create_router(registry: Arc<MetricsRegistry>) -> Router {
         .route("/api/jobs", get(list_jobs))
         .route("/api/jobs/:id", get(get_job_detail))
         .route("/ws/metrics", get(metrics_websocket))
+        // Spreadsheet API endpoints
+        .route("/api/v1/spreadsheet/transform", post(spreadsheet_transform))
+        .route("/api/v1/spreadsheet/validate", post(spreadsheet_validate))
+        .route("/api/v1/spreadsheet/preview", post(spreadsheet_preview))
+        .route("/api/v1/spreadsheet/templates", get(spreadsheet_templates))
+        .route("/api/v1/spreadsheet/transformations", get(spreadsheet_transformations))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -153,6 +160,91 @@ async fn handle_metrics_websocket(
             }
         }
     }
+}
+
+/// Spreadsheet transform endpoint
+async fn spreadsheet_transform(
+    Json(request): Json<SpreadsheetRequest>,
+) -> Json<SpreadsheetResponse> {
+    // For now, return a mock response
+    Json(SpreadsheetResponse {
+        request_id: request.request_id.clone(),
+        success: true,
+        data: request.data.clone(),
+        error: None,
+        metadata: None,
+    })
+}
+
+/// Spreadsheet validate endpoint
+async fn spreadsheet_validate(
+    Json(request): Json<SpreadsheetRequest>,
+) -> Json<SpreadsheetResponse> {
+    // For now, return validation success
+    Json(SpreadsheetResponse {
+        request_id: request.request_id.clone(),
+        success: true,
+        data: None,
+        error: None,
+        metadata: None,
+    })
+}
+
+/// Spreadsheet preview endpoint
+async fn spreadsheet_preview(
+    Json(request): Json<SpreadsheetRequest>,
+) -> Json<SpreadsheetResponse> {
+    // For now, return preview of data
+    Json(SpreadsheetResponse {
+        request_id: request.request_id.clone(),
+        success: true,
+        data: request.data.clone(),
+        error: None,
+        metadata: None,
+    })
+}
+
+/// Spreadsheet templates endpoint
+async fn spreadsheet_templates() -> Json<serde_json::Value> {
+    // For now, return mock templates
+    Json(serde_json::json!({
+        "templates": [
+            {
+                "name": "remove_duplicates",
+                "description": "Remove duplicate rows",
+                "category": "data_cleaning"
+            },
+            {
+                "name": "filter_data",
+                "description": "Filter data by conditions",
+                "category": "data_filtering"
+            }
+        ]
+    }))
+}
+
+/// Spreadsheet transformations endpoint
+async fn spreadsheet_transformations() -> Json<serde_json::Value> {
+    // For now, return available transformations
+    Json(serde_json::json!({
+        "transformations": [
+            {
+                "type": "filter",
+                "name": "Filter",
+                "description": "Filter rows by conditions"
+            },
+            {
+                "type": "map",
+                "name": "Map",
+                "description": "Transform columns"
+            },
+            {
+                "type": "aggregate",
+                "name": "Aggregate",
+                "description": "Aggregate data"
+            }
+        ]
+    }))
 }
 
 /// Run the web server

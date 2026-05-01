@@ -108,7 +108,7 @@ connectors-basic = ["json", "parquet"]
 kafka = ["rdkafka"]
 performance = ["criterion", "pprof"]
 web-ui = ["axum", "tower", "tower-http", "tokio-tungstenite", "uuid", "futures"]
-spreadsheet = []
+spreadsheet = ["axum", "tower", "tower-http", "tokio-tungstenite", "uuid", "futures"]
 
 # Build extension module by default when building with maturin
 extension-module = ["pyo3/extension-module"]
@@ -117,8 +117,12 @@ extension-module = ["pyo3/extension-module"]
 name = "vectrill"
 required-features = ["cli"]
 
+[[bin]]
+name = "vectrill-api"
+required-features = ["spreadsheet"]
+
 # Build script
-build = "spreadsheet/src/build.rs"
+# build = "spreadsheet/src/build.rs" # Disabled for now
 
 # Benchmarks
 [[test]]
