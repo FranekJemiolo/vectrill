@@ -130,6 +130,11 @@ name = "e2e_advanced_features"
 harness = false
 required-features = ["performance"]
 
+[target.'cfg(not(windows))'.test]
+name = "e2e_advanced_features"
+harness = false
+required-features = ["performance"]
+
 [[test]]
 name = "e2e_connectors_comprehensive"
 required-features = ["connectors-full"]
