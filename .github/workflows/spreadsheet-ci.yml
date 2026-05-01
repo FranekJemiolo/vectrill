@@ -1,0 +1,291 @@
+name: Spreadsheet Integration CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'src/spreadsheet/**'
+      - 'spreadsheet/**'
+      - 'Cargo.toml'
+      - '.github/workflows/spreadsheet-ci.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'src/spreadsheet/**'
+      - 'spreadsheet/**'
+      - 'Cargo.toml'
+      - '.github/workflows/spreadsheet-ci.yml'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test-spreadsheet-core:
+    name: Test Spreadsheet Core
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Check spreadsheet formatting
+        run: cargo fmt -- --check src/spreadsheet/
+
+      - name: Run spreadsheet clippy
+        run: cargo clippy --features spreadsheet -- -D warnings
+
+      - name: Build spreadsheet library
+        run: cargo build --features spreadsheet --verbose
+
+      - name: Run spreadsheet unit tests
+        run: cargo test --lib --features spreadsheet --verbose
+
+      - name: Run spreadsheet documentation tests
+        run: cargo test --doc --features spreadsheet --verbose
+
+  test-spreadsheet-examples:
+    name: Test Spreadsheet Examples
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Build spreadsheet examples
+        run: |
+          cargo check --example excel_addin_prototype --features spreadsheet
+          cargo check --example google_sheets_integration --features spreadsheet
+
+  test-spreadsheet-api:
+    name: Test Spreadsheet API
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: spreadsheet/package-lock.json
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Install Node.js dependencies
+        run: |
+          cd spreadsheet
+          npm ci
+
+      - name: Validate OpenAPI specification
+        run: |
+          cd spreadsheet
+          npx @apidevtools/swagger-parser validate api/openapi.yaml
+
+      - name: Build API server
+        run: cargo build --features spreadsheet --bin vectrill-api
+
+  test-spreadsheet-performance:
+    name: Test Spreadsheet Performance
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Run performance benchmarks
+        run: |
+          cargo test --release --features spreadsheet \
+            test_large_dataset_performance \
+            test_memory_usage \
+            -- --nocapture
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-results
+          path: |
+            target/criterion/
+            target/nextest/
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Run security audit
+        run: cargo audit
+
+      - name: Check for security vulnerabilities in dependencies
+        run: |
+          cd spreadsheet
+          npm audit --audit-level moderate
+
+  build-spreadsheet-docs:
+    name: Build Spreadsheet Documentation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Build spreadsheet documentation
+        run: |
+          cargo doc --features spreadsheet --no-deps --document-private-items
+
+      - name: Generate API documentation
+        run: |
+          cd spreadsheet
+          npx swagger-codegen generate -i api/openapi.yaml -l html2 -o docs/
+
+      - name: Upload documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: spreadsheet-docs
+          path: |
+            target/doc/
+            spreadsheet/docs/
+
+  test-spreadsheet-integration:
+    name: Test Spreadsheet Integration
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Run integration tests
+        run: |
+          cargo test --test integration --features spreadsheet --verbose
+
+      - name: Run end-to-end tests
+        run: |
+          cargo test --test e2e --features spreadsheet --verbose
+
+  validate-spreadsheet-templates:
+    name: Validate Spreadsheet Templates
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Validate all templates
+        run: |
+          cargo test --features spreadsheet \
+            test_template_manager_creation \
+            test_template_listing \
+            test_template_retrieval \
+            -- --nocapture
+
+      - name: Check template syntax
+        run: |
+          cd spreadsheet/templates
+          find . -name "*.json" -exec echo "Validating {}" \; -exec python -m json.tool {} \; >/dev/null

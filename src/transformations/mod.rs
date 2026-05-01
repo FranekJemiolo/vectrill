@@ -9,10 +9,10 @@ use async_trait::async_trait;
 pub trait Transformation: Send + Sync {
     /// Apply the transformation to a record batch
     async fn apply(&mut self, batch: &RecordBatch) -> Result<RecordBatch>;
-    
+
     /// Get the name of this transformation
     fn name(&self) -> &str;
-    
+
     /// Get the output schema of this transformation
     fn output_schema(&self) -> SchemaRef;
 }

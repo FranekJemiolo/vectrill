@@ -1,0 +1,123 @@
+# Pre-commit hooks for Vectrill Spreadsheet Integration
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-xml
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: mixed-line-ending
+      - id: fix-byte-order-marker
+
+  - repo: https://github.com/psf/black
+    rev: 23.7.0
+    hooks:
+      - id: black
+        language_version: python3
+        files: ^python/
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        files: ^python/
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        files: ^python/
+        args: [--max-line-length=88, --extend-ignore=E203,W503]
+
+  - repo: https://github.com/rust-lang/rustfmt
+    rev: v1.5.1
+    hooks:
+      - id: rustfmt
+        files: ^src/.*\.rs$
+        args: [--config-path, ../../rustfmt.toml]
+
+  - repo: https://github.com/rust-lang/rust-clippy
+    rev: v1.0.0
+    hooks:
+      - id: clippy
+        files: ^src/.*\.rs$
+        args: [--features, spreadsheet, --, -D, warnings]
+
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.50.0
+    hooks:
+      - id: eslint
+        files: ^src/.*\.(ts|js)$
+        types: [file]
+        additional_dependencies:
+          - eslint@8.49.0
+          - "@typescript-eslint/eslint-plugin@6.7.0"
+          - "@typescript-eslint/parser@6.7.0"
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.0.0
+    hooks:
+      - id: prettier
+        files: ^src/.*\.(ts|js|json|yaml|md)$
+        types_or: [typescript, javascript, json]
+        additional_dependencies:
+          - prettier@3.0.3
+
+  - repo: local
+    hooks:
+      - id: cargo-test-spreadsheet
+        name: Cargo Test Spreadsheet
+        entry: cargo test --features spreadsheet
+        language: system
+        files: ^src/spreadsheet/.*\.rs$
+        pass_filenames: false
+        always_run: false
+
+      - id: cargo-check-spreadsheet
+        name: Cargo Check Spreadsheet
+        entry: cargo check --features spreadsheet
+        language: system
+        files: ^src/spreadsheet/.*\.rs$
+        pass_filenames: false
+        always_run: false
+
+      - id: validate-openapi
+        name: Validate OpenAPI Spec
+        entry: npx @apidevtools/swagger-parser validate
+        language: system
+        files: ^api/openapi\.yaml$
+        pass_filenames: false
+        always_run: false
+
+      - id: validate-templates
+        name: Validate Spreadsheet Templates
+        entry: python -m json.tool
+        language: system
+        files: ^templates/.*\.json$
+        pass_filenames: true
+        always_run: false
+
+      - id: type-check-typescript
+        name: TypeScript Type Check
+        entry: npx tsc --noEmit
+        language: system
+        files: ^src/.*\.(ts|tsx)$
+        pass_filenames: false
+        always_run: false
+
+      - id: build-spreadsheet
+        name: Build Spreadsheet Integration
+        entry: cargo build --features spreadsheet
+        language: system
+        files: ^src/spreadsheet/.*\.rs$
+        pass_filenames: false
+        always_run: false

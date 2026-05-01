@@ -43,7 +43,7 @@ impl Default for TransformationRegistry {
 }
 
 /// Global transformation registry
-pub static TRANSFORMATION_REGISTRY: std::sync::LazyLock<Arc<Mutex<TransformationRegistry>>> = 
+pub static TRANSFORMATION_REGISTRY: std::sync::LazyLock<Arc<Mutex<TransformationRegistry>>> =
     std::sync::LazyLock::new(|| Arc::new(Mutex::new(TransformationRegistry::new())));
 
 /// Register a transformation globally
@@ -89,13 +89,16 @@ impl TransformationPipeline {
     }
 
     /// Apply all transformations in sequence
-    pub async fn apply(&mut self, batch: crate::RecordBatch) -> Result<crate::RecordBatch, crate::VectrillError> {
+    pub async fn apply(
+        &mut self,
+        batch: crate::RecordBatch,
+    ) -> Result<crate::RecordBatch, crate::VectrillError> {
         let mut current_batch = batch;
-        
+
         for transform in &mut self.transformations {
             current_batch = transform.apply(&current_batch).await?;
         }
-        
+
         Ok(current_batch)
     }
 
@@ -118,23 +121,25 @@ impl TransformationPipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transformations::builtin::{FilterTransform, FilterOperator, FilterValue};
+    use crate::transformations::builtin::{FilterOperator, FilterTransform, FilterValue};
     use arrow::datatypes::{DataType, Field, Schema};
     use std::sync::Arc;
 
     #[test]
     fn test_transformation_registry() {
         let mut registry = TransformationRegistry::new();
-        
+
         // Register a transformation
         registry.register("test_filter".to_string(), || {
             Box::new(FilterTransform::new(
                 "value".to_string(),
                 FilterOperator::GreaterThan,
                 FilterValue::Int64(100),
-                Arc::new(Schema::new(vec![
-                    Field::new("value", DataType::Int64, false),
-                ])),
+                Arc::new(Schema::new(vec![Field::new(
+                    "value",
+                    DataType::Int64,
+                    false,
+                )])),
             )) as Box<dyn Transformation>
         });
 
@@ -151,7 +156,7 @@ mod tests {
     #[test]
     fn test_transformation_pipeline() {
         let pipeline = TransformationPipeline::new("test_pipeline".to_string());
-        
+
         assert_eq!(pipeline.name(), "test_pipeline");
         assert_eq!(pipeline.len(), 0);
         assert!(pipeline.is_empty());

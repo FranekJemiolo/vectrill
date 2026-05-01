@@ -43,7 +43,9 @@ impl KafkaSink {
             .set("batch.num.messages", "1000")
             .set("compression.type", "snappy")
             .create()
-            .map_err(|e| VectrillError::Connector(format!("Kafka producer creation failed: {}", e)))?;
+            .map_err(|e| {
+                VectrillError::Connector(format!("Kafka producer creation failed: {}", e))
+            })?;
 
         Ok(Self {
             producer,
@@ -63,7 +65,7 @@ impl KafkaSink {
     /// Write a batch of records to Kafka
     pub async fn write_batch(&self, batch: &RecordBatch) -> Result<()> {
         let arrow_batch = batch;
-        
+
         for row_idx in 0..arrow_batch.num_rows() {
             let message = match self.format {
                 KafkaFormat::Json => self.serialize_row_as_json(arrow_batch, row_idx)?,
@@ -75,14 +77,22 @@ impl KafkaSink {
                 KafkaFormat::Csv => self.serialize_row_as_csv(arrow_batch, row_idx)?,
             };
 
-            let record = FutureRecord::<(), Vec<u8>>::to(&self.topic)
-                .payload(&message);
+            let record = FutureRecord::<(), Vec<u8>>::to(&self.topic).payload(&message);
 
-            match self.producer.send(record, Timeout::After(self.timeout)).await {
+            match self
+                .producer
+                .send(record, Timeout::After(self.timeout))
+                .await
+            {
                 Ok((partition, offset)) => {
                     // Successfully delivered
-                    tracing::debug!("Message delivered to topic: {}, partition: {}, offset: {}", self.topic, partition, offset);
-                },
+                    tracing::debug!(
+                        "Message delivered to topic: {}, partition: {}, offset: {}",
+                        self.topic,
+                        partition,
+                        offset
+                    );
+                }
                 Err((kafka_error, _)) => {
                     return Err(VectrillError::Connector(format!(
                         "Kafka send failed: {:?}",
@@ -98,9 +108,9 @@ impl KafkaSink {
     /// Serialize a single row as JSON
     fn serialize_row_as_json(&self, batch: &ArrowRecordBatch, row_idx: usize) -> Result<Vec<u8>> {
         use serde_json::{Map, Value};
-        
+
         let mut map = Map::new();
-        
+
         for (col_idx, field) in self.schema.fields().iter().enumerate() {
             let array = batch.column(col_idx);
             let value = if array.is_null(row_idx) {
@@ -114,14 +124,14 @@ impl KafkaSink {
 
         let json_str = serde_json::to_string(&Value::Object(map))
             .map_err(|e| VectrillError::Serialization(e))?;
-        
+
         Ok(json_str.into_bytes())
     }
 
     /// Serialize a single row as CSV
     fn serialize_row_as_csv(&self, batch: &ArrowRecordBatch, row_idx: usize) -> Result<Vec<u8>> {
         let mut values = Vec::new();
-        
+
         for (col_idx, _field) in self.schema.fields().iter().enumerate() {
             let array = batch.column(col_idx);
             let value = if array.is_null(row_idx) {
@@ -137,12 +147,16 @@ impl KafkaSink {
     }
 
     /// Convert Arrow value to JSON value
-    fn arrow_value_to_json(&self, array: &dyn arrow::array::Array, row_idx: usize) -> Result<serde_json::Value> {
+    fn arrow_value_to_json(
+        &self,
+        array: &dyn arrow::array::Array,
+        row_idx: usize,
+    ) -> Result<serde_json::Value> {
         use arrow::array::*;
         use arrow::datatypes::DataType;
 
         let data_type = array.data_type();
-        
+
         match data_type {
             DataType::Boolean => {
                 let bool_array = array.as_any().downcast_ref::<BooleanArray>().unwrap();
@@ -150,68 +164,97 @@ impl KafkaSink {
             }
             DataType::Int8 => {
                 let int_array = array.as_any().downcast_ref::<Int8Array>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from(int_array.value(row_idx))))
+                Ok(serde_json::Value::Number(serde_json::Number::from(
+                    int_array.value(row_idx),
+                )))
             }
             DataType::Int16 => {
                 let int_array = array.as_any().downcast_ref::<Int16Array>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from(int_array.value(row_idx))))
+                Ok(serde_json::Value::Number(serde_json::Number::from(
+                    int_array.value(row_idx),
+                )))
             }
             DataType::Int32 => {
                 let int_array = array.as_any().downcast_ref::<Int32Array>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from(int_array.value(row_idx))))
+                Ok(serde_json::Value::Number(serde_json::Number::from(
+                    int_array.value(row_idx),
+                )))
             }
             DataType::Int64 => {
                 let int_array = array.as_any().downcast_ref::<Int64Array>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from(int_array.value(row_idx))))
+                Ok(serde_json::Value::Number(serde_json::Number::from(
+                    int_array.value(row_idx),
+                )))
             }
             DataType::UInt8 => {
                 let int_array = array.as_any().downcast_ref::<UInt8Array>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from(int_array.value(row_idx))))
+                Ok(serde_json::Value::Number(serde_json::Number::from(
+                    int_array.value(row_idx),
+                )))
             }
             DataType::UInt16 => {
                 let int_array = array.as_any().downcast_ref::<UInt16Array>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from(int_array.value(row_idx))))
+                Ok(serde_json::Value::Number(serde_json::Number::from(
+                    int_array.value(row_idx),
+                )))
             }
             DataType::UInt32 => {
                 let int_array = array.as_any().downcast_ref::<UInt32Array>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from(int_array.value(row_idx))))
+                Ok(serde_json::Value::Number(serde_json::Number::from(
+                    int_array.value(row_idx),
+                )))
             }
             DataType::UInt64 => {
                 let int_array = array.as_any().downcast_ref::<UInt64Array>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from(int_array.value(row_idx))))
+                Ok(serde_json::Value::Number(serde_json::Number::from(
+                    int_array.value(row_idx),
+                )))
             }
             DataType::Float32 => {
                 let float_array = array.as_any().downcast_ref::<Float32Array>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from_f64(float_array.value(row_idx) as f64).unwrap()))
+                Ok(serde_json::Value::Number(
+                    serde_json::Number::from_f64(float_array.value(row_idx) as f64).unwrap(),
+                ))
             }
             DataType::Float64 => {
                 let float_array = array.as_any().downcast_ref::<Float64Array>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from_f64(float_array.value(row_idx)).unwrap()))
+                Ok(serde_json::Value::Number(
+                    serde_json::Number::from_f64(float_array.value(row_idx)).unwrap(),
+                ))
             }
             DataType::Utf8 => {
                 let string_array = array.as_any().downcast_ref::<StringArray>().unwrap();
-                Ok(serde_json::Value::String(string_array.value(row_idx).to_string()))
+                Ok(serde_json::Value::String(
+                    string_array.value(row_idx).to_string(),
+                ))
             }
             DataType::Timestamp(_, _) => {
-                let timestamp_array = array.as_any().downcast_ref::<TimestampMillisecondArray>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from(timestamp_array.value(row_idx))))
-            }
-            _ => {
-                Err(VectrillError::Connector(format!(
-                    "Unsupported data type for JSON serialization: {:?}",
-                    data_type
+                let timestamp_array = array
+                    .as_any()
+                    .downcast_ref::<TimestampMillisecondArray>()
+                    .unwrap();
+                Ok(serde_json::Value::Number(serde_json::Number::from(
+                    timestamp_array.value(row_idx),
                 )))
             }
+            _ => Err(VectrillError::Connector(format!(
+                "Unsupported data type for JSON serialization: {:?}",
+                data_type
+            ))),
         }
     }
 
     /// Convert Arrow value to string
-    fn arrow_value_to_string(&self, array: &dyn arrow::array::Array, row_idx: usize) -> Result<String> {
+    fn arrow_value_to_string(
+        &self,
+        array: &dyn arrow::array::Array,
+        row_idx: usize,
+    ) -> Result<String> {
         use arrow::array::*;
         use arrow::datatypes::DataType;
 
         let data_type = array.data_type();
-        
+
         match data_type {
             DataType::Boolean => {
                 let bool_array = array.as_any().downcast_ref::<BooleanArray>().unwrap();
@@ -262,15 +305,16 @@ impl KafkaSink {
                 Ok(string_array.value(row_idx).to_string())
             }
             DataType::Timestamp(_, _) => {
-                let timestamp_array = array.as_any().downcast_ref::<TimestampMillisecondArray>().unwrap();
+                let timestamp_array = array
+                    .as_any()
+                    .downcast_ref::<TimestampMillisecondArray>()
+                    .unwrap();
                 Ok(timestamp_array.value(row_idx).to_string())
             }
-            _ => {
-                Err(VectrillError::Connector(format!(
-                    "Unsupported data type for CSV serialization: {:?}",
-                    data_type
-                )))
-            }
+            _ => Err(VectrillError::Connector(format!(
+                "Unsupported data type for CSV serialization: {:?}",
+                data_type
+            ))),
         }
     }
 
@@ -320,7 +364,7 @@ mod tests {
             KafkaFormat::Json,
             schema,
         );
-        
+
         // We expect this to fail in test environment without Kafka
         assert!(result.is_ok() || result.is_err());
     }

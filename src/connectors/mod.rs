@@ -23,8 +23,8 @@ pub mod file;
 pub mod memory;
 
 // Sink connectors
-pub mod sink;
 pub mod file_sink;
+pub mod sink;
 
 #[cfg(feature = "kafka")]
 pub mod kafka;
@@ -34,7 +34,7 @@ pub use file::FileConnector;
 pub use memory::MemoryConnector;
 
 // Sink exports
-pub use sink::{Sink, FileSink};
+pub use sink::{FileSink, Sink};
 
 #[cfg(feature = "kafka")]
 pub use kafka::KafkaSink;

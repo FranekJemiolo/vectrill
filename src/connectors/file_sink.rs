@@ -35,7 +35,9 @@ impl FileSink {
             .create(true)
             .append(true)
             .open(&path)
-            .map_err(|e| VectrillError::Connector(format!("Failed to open file {}: {}", path.display(), e)))?;
+            .map_err(|e| {
+                VectrillError::Connector(format!("Failed to open file {}: {}", path.display(), e))
+            })?;
 
         let writer: Box<dyn Write + Send> = match format {
             FileSinkFormat::Csv => Box::new(file),
@@ -62,7 +64,8 @@ impl FileSink {
             return Ok(());
         }
 
-        let headers: Vec<String> = self.schema
+        let headers: Vec<String> = self
+            .schema
             .fields()
             .iter()
             .map(|field| field.name().clone())
@@ -75,7 +78,9 @@ impl FileSink {
             })?;
             writer_guard
                 .write_all(header_line.as_bytes())
-                .map_err(|e| VectrillError::Connector(format!("Failed to write CSV header: {}", e)))?;
+                .map_err(|e| {
+                    VectrillError::Connector(format!("Failed to write CSV header: {}", e))
+                })?;
             writer_guard
                 .write_all(b"\n")
                 .map_err(|e| VectrillError::Connector(format!("Failed to write newline: {}", e)))?;
@@ -90,10 +95,10 @@ impl FileSink {
         self.write_csv_header()?;
 
         let arrow_batch = batch;
-        
+
         for row_idx in 0..arrow_batch.num_rows() {
             let mut values = Vec::new();
-            
+
             for col_idx in 0..arrow_batch.num_columns() {
                 let array = arrow_batch.column(col_idx);
                 let value = if array.is_null(row_idx) {
@@ -109,12 +114,12 @@ impl FileSink {
                 let mut writer_guard = writer.lock().map_err(|e| {
                     VectrillError::Connector(format!("Failed to acquire writer lock: {}", e))
                 })?;
-                writer_guard
-                    .write_all(line.as_bytes())
-                    .map_err(|e| VectrillError::Connector(format!("Failed to write CSV line: {}", e)))?;
-                writer_guard
-                    .write_all(b"\n")
-                    .map_err(|e| VectrillError::Connector(format!("Failed to write newline: {}", e)))?;
+                writer_guard.write_all(line.as_bytes()).map_err(|e| {
+                    VectrillError::Connector(format!("Failed to write CSV line: {}", e))
+                })?;
+                writer_guard.write_all(b"\n").map_err(|e| {
+                    VectrillError::Connector(format!("Failed to write newline: {}", e))
+                })?;
             }
         }
 
@@ -124,20 +129,20 @@ impl FileSink {
     /// Write a batch in JSON format
     fn write_json_batch(&mut self, batch: &RecordBatch) -> Result<()> {
         let arrow_batch = batch;
-        
+
         for row_idx in 0..arrow_batch.num_rows() {
             let json_line = self.serialize_row_as_json(arrow_batch, row_idx)?;
-            
+
             if let Some(ref writer) = self.writer {
                 let mut writer_guard = writer.lock().map_err(|e| {
                     VectrillError::Connector(format!("Failed to acquire writer lock: {}", e))
                 })?;
-                writer_guard
-                    .write_all(json_line.as_bytes())
-                    .map_err(|e| VectrillError::Connector(format!("Failed to write JSON line: {}", e)))?;
-                writer_guard
-                    .write_all(b"\n")
-                    .map_err(|e| VectrillError::Connector(format!("Failed to write newline: {}", e)))?;
+                writer_guard.write_all(json_line.as_bytes()).map_err(|e| {
+                    VectrillError::Connector(format!("Failed to write JSON line: {}", e))
+                })?;
+                writer_guard.write_all(b"\n").map_err(|e| {
+                    VectrillError::Connector(format!("Failed to write newline: {}", e))
+                })?;
             }
         }
 
@@ -147,9 +152,9 @@ impl FileSink {
     /// Serialize a single row as JSON
     fn serialize_row_as_json(&self, batch: &ArrowRecordBatch, row_idx: usize) -> Result<String> {
         use serde_json::{Map, Value};
-        
+
         let mut map = Map::new();
-        
+
         for (col_idx, field) in self.schema.fields().iter().enumerate() {
             let array = batch.column(col_idx);
             let value = if array.is_null(row_idx) {
@@ -166,12 +171,16 @@ impl FileSink {
     }
 
     /// Convert Arrow value to JSON value
-    fn arrow_value_to_json(&self, array: &dyn arrow::array::Array, row_idx: usize) -> Result<serde_json::Value> {
+    fn arrow_value_to_json(
+        &self,
+        array: &dyn arrow::array::Array,
+        row_idx: usize,
+    ) -> Result<serde_json::Value> {
         use arrow::array::*;
         use arrow::datatypes::DataType;
 
         let data_type = array.data_type();
-        
+
         match data_type {
             DataType::Boolean => {
                 let bool_array = array.as_any().downcast_ref::<BooleanArray>().unwrap();
@@ -179,40 +188,52 @@ impl FileSink {
             }
             DataType::Int32 => {
                 let int_array = array.as_any().downcast_ref::<Int32Array>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from(int_array.value(row_idx))))
+                Ok(serde_json::Value::Number(serde_json::Number::from(
+                    int_array.value(row_idx),
+                )))
             }
             DataType::Int64 => {
                 let int_array = array.as_any().downcast_ref::<Int64Array>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from(int_array.value(row_idx))))
+                Ok(serde_json::Value::Number(serde_json::Number::from(
+                    int_array.value(row_idx),
+                )))
             }
             DataType::Float32 => {
                 let float_array = array.as_any().downcast_ref::<Float32Array>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from_f64(float_array.value(row_idx) as f64).unwrap()))
+                Ok(serde_json::Value::Number(
+                    serde_json::Number::from_f64(float_array.value(row_idx) as f64).unwrap(),
+                ))
             }
             DataType::Float64 => {
                 let float_array = array.as_any().downcast_ref::<Float64Array>().unwrap();
-                Ok(serde_json::Value::Number(serde_json::Number::from_f64(float_array.value(row_idx)).unwrap()))
+                Ok(serde_json::Value::Number(
+                    serde_json::Number::from_f64(float_array.value(row_idx)).unwrap(),
+                ))
             }
             DataType::Utf8 => {
                 let string_array = array.as_any().downcast_ref::<StringArray>().unwrap();
-                Ok(serde_json::Value::String(string_array.value(row_idx).to_string()))
+                Ok(serde_json::Value::String(
+                    string_array.value(row_idx).to_string(),
+                ))
             }
-            _ => {
-                Err(VectrillError::Connector(format!(
-                    "Unsupported data type for JSON serialization: {:?}",
-                    data_type
-                )))
-            }
+            _ => Err(VectrillError::Connector(format!(
+                "Unsupported data type for JSON serialization: {:?}",
+                data_type
+            ))),
         }
     }
 
     /// Convert Arrow value to string
-    fn arrow_value_to_string(&self, array: &dyn arrow::array::Array, row_idx: usize) -> Result<String> {
+    fn arrow_value_to_string(
+        &self,
+        array: &dyn arrow::array::Array,
+        row_idx: usize,
+    ) -> Result<String> {
         use arrow::array::*;
         use arrow::datatypes::DataType;
 
         let data_type = array.data_type();
-        
+
         match data_type {
             DataType::Boolean => {
                 let bool_array = array.as_any().downcast_ref::<BooleanArray>().unwrap();
@@ -238,12 +259,10 @@ impl FileSink {
                 let string_array = array.as_any().downcast_ref::<StringArray>().unwrap();
                 Ok(string_array.value(row_idx).to_string())
             }
-            _ => {
-                Err(VectrillError::Connector(format!(
-                    "Unsupported data type for string serialization: {:?}",
-                    data_type
-                )))
-            }
+            _ => Err(VectrillError::Connector(format!(
+                "Unsupported data type for string serialization: {:?}",
+                data_type
+            ))),
         }
     }
 }
@@ -296,11 +315,7 @@ mod tests {
         ]));
 
         let temp_file = NamedTempFile::new().unwrap();
-        let sink = FileSink::new(
-            temp_file.path().to_path_buf(),
-            FileSinkFormat::Csv,
-            schema,
-        );
+        let sink = FileSink::new(temp_file.path().to_path_buf(), FileSinkFormat::Csv, schema);
         assert!(sink.is_ok());
     }
 

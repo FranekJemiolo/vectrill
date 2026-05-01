@@ -22,11 +22,11 @@ pub mod cli;
 #[cfg(feature = "python")]
 pub mod ffi;
 
+#[cfg(feature = "spreadsheet")]
+pub mod spreadsheet;
 pub mod transformations;
 #[cfg(feature = "web-ui")]
 pub mod web;
-#[cfg(feature = "spreadsheet")]
-pub mod spreadsheet;
 
 pub use arrow::datatypes::SchemaRef;
 pub use arrow::record_batch::RecordBatch;

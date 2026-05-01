@@ -1,14 +1,11 @@
 //! Spreadsheet API
-//! 
+//!
 //! Provides a simplified API for spreadsheet applications to interact with Vectrill.
 
+use crate::transformations::TransformationPipeline;
+use crate::{error::Result, VectrillError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::{error::Result, VectrillError};
-use crate::transformations::TransformationPipeline;
-use crate::transformations::builtin::{
-    FilterOperator, FilterValue, MapOperation
-};
 
 /// Request from spreadsheet application
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -177,49 +174,46 @@ impl SpreadsheetAPI {
             templates: HashMap::new(),
         }
     }
-    
+
     /// Process a spreadsheet request
-    pub async fn process_request(&mut self, request: SpreadsheetRequest) -> Result<SpreadsheetResponse> {
+    pub async fn process_request(
+        &mut self,
+        request: SpreadsheetRequest,
+    ) -> Result<SpreadsheetResponse> {
         let request_id = request.request_id.clone();
-        
+
         match request.operation {
-            OperationType::Transform => {
-                self.handle_transform(request).await
-            }
-            OperationType::GetTransformations => {
-                self.handle_get_transformations(request).await
-            }
-            OperationType::Validate => {
-                self.handle_validate(request).await
-            }
-            OperationType::GetTemplates => {
-                self.handle_get_templates(request).await
-            }
-            OperationType::Preview => {
-                self.handle_preview(request).await
-            }
-        }.map(|mut response| {
+            OperationType::Transform => self.handle_transform(request).await,
+            OperationType::GetTransformations => self.handle_get_transformations(request).await,
+            OperationType::Validate => self.handle_validate(request).await,
+            OperationType::GetTemplates => self.handle_get_templates(request).await,
+            OperationType::Preview => self.handle_preview(request).await,
+        }
+        .map(|mut response| {
             response.request_id = request_id;
             response
         })
     }
-    
+
     /// Handle data transformation requests
-    async fn handle_transform(&mut self, request: SpreadsheetRequest) -> Result<SpreadsheetResponse> {
+    async fn handle_transform(
+        &mut self,
+        request: SpreadsheetRequest,
+    ) -> Result<SpreadsheetResponse> {
         let transformation = request.transformation.ok_or_else(|| {
             VectrillError::InvalidConfig("Transformation configuration required".to_string())
         })?;
-        
+
         // Convert spreadsheet data to Arrow format
         let record_batch = self.spreadsheet_to_arrow(&request.data)?;
-        
+
         // Apply transformation
         let mut pipeline = self.build_pipeline(&transformation)?;
         let transformed_batch = pipeline.apply(record_batch).await?;
-        
+
         // Convert back to spreadsheet format
         let output_data = self.arrow_to_spreadsheet(&transformed_batch, &request.output)?;
-        
+
         let metadata = TransformationMetadata {
             input_rows: request.data.rows.len(),
             output_rows: output_data.rows.len(),
@@ -227,7 +221,7 @@ impl SpreadsheetAPI {
             execution_time_ms: 0, // TODO: Measure actual execution time
             steps: vec![transformation.transform_type.to_string()],
         };
-        
+
         Ok(SpreadsheetResponse {
             request_id: String::new(), // Will be set by caller
             success: true,
@@ -236,9 +230,12 @@ impl SpreadsheetAPI {
             metadata: Some(metadata),
         })
     }
-    
+
     /// Handle get transformations request
-    async fn handle_get_transformations(&self, _request: SpreadsheetRequest) -> Result<SpreadsheetResponse> {
+    async fn handle_get_transformations(
+        &self,
+        _request: SpreadsheetRequest,
+    ) -> Result<SpreadsheetResponse> {
         // Return available transformations
         let transformations = vec![
             AvailableTransformation {
@@ -284,11 +281,15 @@ impl SpreadsheetAPI {
                 ],
             },
         ];
-        
+
         // Convert to spreadsheet data format
-        let headers = vec!["name".to_string(), "description".to_string(), "parameters".to_string()];
+        let headers = vec![
+            "name".to_string(),
+            "description".to_string(),
+            "parameters".to_string(),
+        ];
         let mut rows = Vec::new();
-        
+
         for transform in transformations {
             let params_str = format!("{} parameters", transform.parameters.len());
             rows.push(vec![
@@ -297,7 +298,7 @@ impl SpreadsheetAPI {
                 CellValue::String(params_str),
             ]);
         }
-        
+
         let data = SpreadsheetData {
             headers,
             rows,
@@ -305,7 +306,7 @@ impl SpreadsheetAPI {
             range: None,
             sheet_name: None,
         };
-        
+
         Ok(SpreadsheetResponse {
             request_id: String::new(), // Will be set by caller
             success: true,
@@ -314,30 +315,41 @@ impl SpreadsheetAPI {
             metadata: None,
         })
     }
-    
+
     /// Handle validation request
     async fn handle_validate(&self, request: SpreadsheetRequest) -> Result<SpreadsheetResponse> {
         let transformation = request.transformation.ok_or_else(|| {
             VectrillError::InvalidConfig("Transformation configuration required".to_string())
         })?;
-        
+
         // Validate transformation configuration
         let validation_result = self.validate_transformation(&transformation, &request.data)?;
-        
+
         Ok(SpreadsheetResponse {
             request_id: String::new(), // Will be set by caller
             success: validation_result.is_valid,
             data: None,
-            error: if validation_result.is_valid { None } else { validation_result.error.clone() },
+            error: if validation_result.is_valid {
+                None
+            } else {
+                validation_result.error.clone()
+            },
             metadata: None,
         })
     }
-    
+
     /// Handle get templates request
-    async fn handle_get_templates(&self, _request: SpreadsheetRequest) -> Result<SpreadsheetResponse> {
-        let headers = vec!["name".to_string(), "description".to_string(), "category".to_string()];
+    async fn handle_get_templates(
+        &self,
+        _request: SpreadsheetRequest,
+    ) -> Result<SpreadsheetResponse> {
+        let headers = vec![
+            "name".to_string(),
+            "description".to_string(),
+            "category".to_string(),
+        ];
         let mut rows = Vec::new();
-        
+
         for (name, template) in &self.templates {
             rows.push(vec![
                 CellValue::String(name.clone()),
@@ -345,7 +357,7 @@ impl SpreadsheetAPI {
                 CellValue::String(template.category.clone()),
             ]);
         }
-        
+
         let data = SpreadsheetData {
             headers,
             rows,
@@ -353,7 +365,7 @@ impl SpreadsheetAPI {
             range: None,
             sheet_name: None,
         };
-        
+
         Ok(SpreadsheetResponse {
             request_id: String::new(), // Will be set by caller
             success: true,
@@ -362,46 +374,56 @@ impl SpreadsheetAPI {
             metadata: None,
         })
     }
-    
+
     /// Handle preview request
     async fn handle_preview(&mut self, request: SpreadsheetRequest) -> Result<SpreadsheetResponse> {
         // Similar to transform but limit output to first few rows
         let mut preview_request = request;
         preview_request.output.max_rows = Some(10); // Preview first 10 rows
-        
+
         self.handle_transform(preview_request).await
     }
-    
+
     /// Convert spreadsheet data to Arrow RecordBatch
-    fn spreadsheet_to_arrow(&self, data: &SpreadsheetData) -> Result<crate::RecordBatch> {
+    fn spreadsheet_to_arrow(&self, _data: &SpreadsheetData) -> Result<crate::RecordBatch> {
         // TODO: Implement conversion from spreadsheet format to Arrow
         // This would involve:
         // 1. Creating Arrow schema from headers and column types
         // 2. Converting rows to Arrow arrays
         // 3. Creating RecordBatch
-        
-        Err(VectrillError::NotImplemented("spreadsheet_to_arrow conversion not yet implemented".to_string()))
+
+        Err(VectrillError::NotImplemented(
+            "spreadsheet_to_arrow conversion not yet implemented".to_string(),
+        ))
     }
-    
+
     /// Convert Arrow RecordBatch to spreadsheet data
-    fn arrow_to_spreadsheet(&self, batch: &crate::RecordBatch, output: &OutputConfig) -> Result<SpreadsheetData> {
+    fn arrow_to_spreadsheet(&self, _batch: &crate::RecordBatch, _output: &OutputConfig) -> Result<SpreadsheetData> {
         // TODO: Implement conversion from Arrow to spreadsheet format
         // This would involve:
         // 1. Extracting headers from schema
         // 2. Converting Arrow arrays to cell values
         // 3. Applying output format (transpose, summary, etc.)
-        
-        Err(VectrillError::NotImplemented("arrow_to_spreadsheet conversion not yet implemented".to_string()))
+
+        Err(VectrillError::NotImplemented(
+            "arrow_to_spreadsheet conversion not yet implemented".to_string(),
+        ))
     }
-    
+
     /// Build transformation pipeline from configuration
-    fn build_pipeline(&self, config: &TransformationConfig) -> Result<TransformationPipeline> {
+    fn build_pipeline(&self, _config: &TransformationConfig) -> Result<TransformationPipeline> {
         // TODO: Build pipeline from configuration
-        Err(VectrillError::NotImplemented("Pipeline building not yet implemented".to_string()))
+        Err(VectrillError::NotImplemented(
+            "Pipeline building not yet implemented".to_string(),
+        ))
     }
-    
+
     /// Validate transformation configuration
-    fn validate_transformation(&self, config: &TransformationConfig, data: &SpreadsheetData) -> Result<ValidationResult> {
+    fn validate_transformation(
+        &self,
+        _config: &TransformationConfig,
+        _data: &SpreadsheetData,
+    ) -> Result<ValidationResult> {
         // TODO: Validate configuration against data schema
         Ok(ValidationResult {
             is_valid: true,

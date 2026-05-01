@@ -1,8 +1,9 @@
 //! Spreadsheet Utilities
-//! 
+//!
 //! Utility functions for working with spreadsheet data and references.
 
-use crate::error::VectrillError;
+use std::fmt;
+use crate::{error::Result, VectrillError};
 use std::collections::HashMap;
 
 /// Cell reference utilities
@@ -18,93 +19,106 @@ pub struct CellReference {
 
 impl CellReference {
     /// Parse cell reference from string (e.g., "A1", "Sheet1!A1")
-    pub fn parse(reference: &str) -> Result<Self, VectrillError> {
+    pub fn parse(reference: &str) -> Result<Self> {
         let (sheet_part, cell_part) = if reference.contains('!') {
             let parts: Vec<&str> = reference.split('!').collect();
             if parts.len() != 2 {
-                return Err(VectrillError::InvalidConfig(format!("Invalid cell reference: {}", reference)));
+                return Err(VectrillError::InvalidConfig(format!(
+                    "Invalid cell reference: {}",
+                    reference
+                )));
             }
             (Some(parts[0]), parts[1])
         } else {
             (None, reference)
         };
-        
+
         let (column, row) = Self::parse_cell_part(cell_part)?;
-        
+
         Ok(CellReference {
             column,
             row,
             sheet: sheet_part.map(|s| s.to_string()),
         })
     }
-    
+
     /// Parse cell part (e.g., "A1" -> ("A", 1))
-    fn parse_cell_part(cell_part: &str) -> Result<(String, u32), VectrillError> {
+    fn parse_cell_part(cell_part: &str) -> Result<(String, u32)> {
         if cell_part.is_empty() {
-            return Err(VectrillError::InvalidConfig("Empty cell reference".to_string()));
+            return Err(VectrillError::InvalidConfig(
+                "Empty cell reference".to_string(),
+            ));
         }
-        
+
         let mut chars = cell_part.chars().peekable();
         let mut column = String::new();
-        
+
         // Extract column letters
-        while let Some(&ch) = chars.peek() {
-            if ch.is_alphabetic() {
-                column.push(ch);
-                chars.next();
+        while let Some(&next_ch) = chars.peek() {
+            if next_ch.is_alphabetic() {
+                column.push(next_ch);
+                chars.next(); // Consume the character
             } else {
-                break;
+                break; // Don't consume the non-alphabetic character
             }
         }
-        
+
         if column.is_empty() {
-            return Err(VectrillError::InvalidConfig("Missing column in cell reference".to_string()));
+            return Err(VectrillError::InvalidConfig(
+                "Missing column in cell reference".to_string(),
+            ));
         }
-        
+
         // Extract row number
         let row_str: String = chars.collect();
         if row_str.is_empty() {
-            return Err(VectrillError::InvalidConfig("Missing row in cell reference".to_string()));
+            return Err(VectrillError::InvalidConfig(
+                "Missing row in cell reference".to_string(),
+            ));
         }
-        
-        let row = row_str.parse::<u32>()
+
+        let row = row_str
+            .parse::<u32>()
             .map_err(|_| VectrillError::InvalidConfig("Invalid row number".to_string()))?;
-        
+
         Ok((column, row))
     }
-    
+
     /// Convert column letter(s) to column index (0-based)
-    pub fn column_to_index(&self) -> Result<u32, VectrillError> {
+    pub fn column_to_index(&self) -> Result<u32> {
         let mut index = 0u32;
-        for (i, ch) in self.column.chars().enumerate() {
+        for ch in self.column.chars() {
             if !ch.is_alphabetic() {
-                return Err(VectrillError::InvalidConfig("Invalid column letter".to_string()));
+                return Err(VectrillError::InvalidConfig(
+                    "Invalid column letter".to_string(),
+                ));
             }
             let value = (ch.to_ascii_uppercase() as u8 - b'A' + 1) as u32;
             index = index * 26 + value;
         }
         Ok(index - 1) // Convert to 0-based
     }
-    
+
     /// Convert column index (0-based) to column letter(s)
     pub fn index_to_column(index: u32) -> String {
         let mut column = String::new();
         let mut index = index + 1; // Convert to 1-based
-        
+
         while index > 0 {
             index -= 1;
             column.push(char::from(b'A' + (index % 26) as u8));
             index /= 26;
         }
-        
+
         column.chars().rev().collect()
     }
-    
-    /// Convert to string representation
-    pub fn to_string(&self) -> String {
+}
+
+impl fmt::Display for CellReference {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.sheet {
-            Some(sheet) => format!("{}!{}{}", sheet, self.column, self.row),
-            None => format!("{}{}", self.column, self.row),
+            Some(sheet) => write!(f, "{}!{}{}", sheet, self.column, self.row),
+            None => write!(f, "{}{}", self.column, self.row),
         }
     }
 }
@@ -122,57 +136,77 @@ pub struct RangeReference {
 
 impl RangeReference {
     /// Parse range reference from string (e.g., "A1:C10", "Sheet1!A1:C10")
-    pub fn parse(reference: &str) -> Result<Self, VectrillError> {
+    pub fn parse(reference: &str) -> Result<Self> {
         let (sheet_part, range_part) = if reference.contains('!') {
             let parts: Vec<&str> = reference.split('!').collect();
             if parts.len() != 2 {
-                return Err(VectrillError::InvalidConfig(format!("Invalid range reference: {}", reference)));
+                return Err(VectrillError::InvalidConfig(format!(
+                    "Invalid range reference: {}",
+                    reference
+                )));
             }
             (Some(parts[0]), parts[1])
         } else {
             (None, reference)
         };
-        
+
         let cell_parts: Vec<&str> = range_part.split(':').collect();
         if cell_parts.len() != 2 {
-            return Err(VectrillError::InvalidConfig("Range must contain start and end cells".to_string()));
+            return Err(VectrillError::InvalidConfig(
+                "Range must contain start and end cells".to_string(),
+            ));
         }
-        
+
         let start = CellReference::parse(cell_parts[0])?;
         let end = CellReference::parse(cell_parts[1])?;
-        
+
         // Validate that end cell is after start cell
         if start.column_to_index()? > end.column_to_index()? || start.row > end.row {
-            return Err(VectrillError::InvalidConfig("End cell must be after start cell".to_string()));
+            return Err(VectrillError::InvalidConfig(
+                "End cell must be after start cell".to_string(),
+            ));
         }
-        
+
         Ok(RangeReference {
             start,
             end,
             sheet: sheet_part.map(|s| s.to_string()),
         })
     }
-    
+
     /// Get the number of columns in the range
-    pub fn column_count(&self) -> Result<u32, VectrillError> {
+    pub fn column_count(&self) -> Result<u32> {
         Ok(self.end.column_to_index()? - self.start.column_to_index()? + 1)
     }
-    
+
     /// Get the number of rows in the range
     pub fn row_count(&self) -> u32 {
         self.end.row - self.start.row + 1
     }
-    
+
     /// Get the total number of cells in the range
-    pub fn cell_count(&self) -> Result<u32, VectrillError> {
+    pub fn cell_count(&self) -> Result<u32> {
         Ok(self.column_count()? * self.row_count())
     }
-    
-    /// Convert to string representation
-    pub fn to_string(&self) -> String {
+
+    }
+
+impl fmt::Display for RangeReference {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.sheet {
-            Some(sheet) => format!("{}!{}:{}", sheet, self.start.to_string(), self.end.to_string()),
-            None => format!("{}:{}", self.start.to_string(), self.end.to_string()),
+            Some(sheet) => write!(
+                f,
+                "{}!{}:{}",
+                sheet,
+                self.start,
+                self.end
+            ),
+            None => write!(
+                f,
+                "{}:{}",
+                self.start,
+                self.end
+            ),
         }
     }
 }
@@ -190,18 +224,18 @@ impl RangeParser {
             cache: HashMap::new(),
         }
     }
-    
+
     /// Parse range reference with caching
-    pub fn parse(&mut self, reference: &str) -> Result<RangeReference, VectrillError> {
+    pub fn parse(&mut self, reference: &str) -> Result<RangeReference> {
         if let Some(cached) = self.cache.get(reference) {
             return Ok(cached.clone());
         }
-        
+
         let range = RangeReference::parse(reference)?;
         self.cache.insert(reference.to_string(), range.clone());
         Ok(range)
     }
-    
+
     /// Clear cache
     pub fn clear_cache(&mut self) {
         self.cache.clear();
@@ -224,7 +258,7 @@ impl FormulaParser {
         let mut chars = formula.chars().peekable();
         let mut current = String::new();
         let mut in_reference = false;
-        
+
         while let Some(&ch) = chars.peek() {
             if ch.is_alphabetic() && !in_reference {
                 // Start of potential cell reference
@@ -248,24 +282,24 @@ impl FormulaParser {
                 chars.next();
             }
         }
-        
+
         // Handle last reference if formula ends with one
         if in_reference && !current.is_empty() {
             if let Ok(reference) = CellReference::parse(&current) {
                 references.push(reference);
             }
         }
-        
+
         references
     }
-    
+
     /// Extract range references from a formula
     pub fn extract_range_references(formula: &str) -> Vec<RangeReference> {
         let mut references = Vec::new();
         let mut chars = formula.chars().peekable();
         let mut current = String::new();
         let mut in_reference = false;
-        
+
         while let Some(&ch) = chars.peek() {
             if ch.is_alphabetic() && !in_reference {
                 // Start of potential range reference
@@ -291,52 +325,45 @@ impl FormulaParser {
                 chars.next();
             }
         }
-        
+
         // Handle last reference if formula ends with one
         if in_reference && !current.is_empty() && current.contains(':') {
             if let Ok(reference) = RangeReference::parse(&current) {
                 references.push(reference);
             }
         }
-        
+
         references
     }
-    
+
     /// Validate formula syntax (basic validation)
-    pub fn validate_formula(formula: &str) -> Result<(), VectrillError> {
+    pub fn validate_formula(formula: &str) -> Result<()> {
         if formula.is_empty() {
             return Ok(()); // Empty formula is valid
         }
-        
+
         // Check for balanced parentheses
         let mut paren_count = 0;
-        let mut chars = formula.chars();
-        
-        while let Some(ch) = chars.next() {
-            match ch {
+        for next_ch in formula.chars() {
+            match next_ch {
                 '(' => paren_count += 1,
-                ')' => {
-                    paren_count -= 1;
-                    if paren_count < 0 {
-                        return Err(VectrillError::InvalidConfig("Unbalanced parentheses in formula".to_string()));
-                    }
-                }
-                '"' => {
-                    // Skip string literals
-                    while let Some(next_ch) = chars.next() {
-                        if next_ch == '"' {
-                            break;
-                        }
-                    }
-                }
+                ')' => paren_count -= 1,
                 _ => {}
             }
+            
+            if paren_count < 0 {
+                return Err(VectrillError::InvalidConfig(
+                    "Unbalanced parentheses in formula".to_string(),
+                ));
+            }
         }
-        
+
         if paren_count != 0 {
-            return Err(VectrillError::InvalidConfig("Unbalanced parentheses in formula".to_string()));
+            return Err(VectrillError::InvalidConfig(
+                "Unbalanced parentheses in formula".to_string(),
+            ));
         }
-        
+
         // TODO: Add more validation rules
         Ok(())
     }
@@ -351,25 +378,26 @@ impl DataTypeUtils {
         if values.is_empty() {
             return crate::spreadsheet::api::DataType::Empty;
         }
-        
+
         let mut type_scores = std::collections::HashMap::new();
         type_scores.insert(crate::spreadsheet::api::DataType::String, 0);
         type_scores.insert(crate::spreadsheet::api::DataType::Number, 0);
         type_scores.insert(crate::spreadsheet::api::DataType::Boolean, 0);
         type_scores.insert(crate::spreadsheet::api::DataType::Date, 0);
         type_scores.insert(crate::spreadsheet::api::DataType::Empty, 0);
-        
+
         for value in values {
             let inferred_type = Self::infer_type_from_value(value);
             *type_scores.entry(inferred_type).or_insert(0) += 1;
         }
-        
-        type_scores.iter()
+
+        type_scores
+            .iter()
             .max_by_key(|(_, &score)| score)
             .map(|(t, _)| t.clone())
             .unwrap_or(crate::spreadsheet::api::DataType::String)
     }
-    
+
     /// Infer data type from a single value
     pub fn infer_type_from_value(value: &str) -> crate::spreadsheet::api::DataType {
         if value.trim().is_empty() {
@@ -384,26 +412,33 @@ impl DataTypeUtils {
             crate::spreadsheet::api::DataType::String
         }
     }
-    
+
     /// Check if string looks like a date
     fn looks_like_date(value: &str) -> bool {
         // Simple date detection - could be enhanced
-        value.contains('/') || value.contains('-') || value.contains(':') ||
-        value.to_lowercase().contains("am") || value.to_lowercase().contains("pm") ||
-        value.len() == 8 && value.chars().all(|c| c.is_numeric()) // YYYYMMDD
+        value.contains('/')
+            || value.contains('-')
+            || value.contains(':')
+            || value.to_lowercase().contains("am")
+            || value.to_lowercase().contains("pm")
+            || value.len() == 8 && value.chars().all(|c| c.is_numeric()) // YYYYMMDD
     }
-    
+
     /// Convert value to target type
-    pub fn convert_value(value: &str, target_type: &crate::spreadsheet::api::DataType) -> Result<crate::spreadsheet::api::CellValue, VectrillError> {
+    pub fn convert_value(
+        value: &str,
+        target_type: &crate::spreadsheet::api::DataType,
+    ) -> Result<crate::spreadsheet::api::CellValue> {
         match target_type {
-            crate::spreadsheet::api::DataType::String => {
-                Ok(crate::spreadsheet::api::CellValue::String(value.to_string()))
-            }
-            crate::spreadsheet::api::DataType::Number => {
-                value.parse::<f64>()
-                    .map(crate::spreadsheet::api::CellValue::Number)
-                    .map_err(|_| VectrillError::InvalidConfig(format!("Cannot convert '{}' to number", value)))
-            }
+            crate::spreadsheet::api::DataType::String => Ok(
+                crate::spreadsheet::api::CellValue::String(value.to_string()),
+            ),
+            crate::spreadsheet::api::DataType::Number => value
+                .parse::<f64>()
+                .map(crate::spreadsheet::api::CellValue::Number)
+                .map_err(|_| {
+                    VectrillError::InvalidConfig(format!("Cannot convert '{}' to number", value))
+                }),
             crate::spreadsheet::api::DataType::Boolean => {
                 if let Ok(bool_val) = value.parse::<bool>() {
                     Ok(crate::spreadsheet::api::CellValue::Boolean(bool_val))
@@ -412,15 +447,24 @@ impl DataTypeUtils {
                 } else {
                     let lower = value.to_lowercase();
                     match lower.as_str() {
-                        "true" | "yes" | "1" | "on" => Ok(crate::spreadsheet::api::CellValue::Boolean(true)),
-                        "false" | "no" | "0" | "off" => Ok(crate::spreadsheet::api::CellValue::Boolean(false)),
-                        _ => Err(VectrillError::InvalidConfig(format!("Cannot convert '{}' to boolean", value))),
+                        "true" | "yes" | "1" | "on" => {
+                            Ok(crate::spreadsheet::api::CellValue::Boolean(true))
+                        }
+                        "false" | "no" | "0" | "off" => {
+                            Ok(crate::spreadsheet::api::CellValue::Boolean(false))
+                        }
+                        _ => Err(VectrillError::InvalidConfig(format!(
+                            "Cannot convert '{}' to boolean",
+                            value
+                        ))),
                     }
                 }
             }
             crate::spreadsheet::api::DataType::Date => {
                 // TODO: Implement proper date parsing
-                Ok(crate::spreadsheet::api::CellValue::String(value.to_string()))
+                Ok(crate::spreadsheet::api::CellValue::String(
+                    value.to_string(),
+                ))
             }
             crate::spreadsheet::api::DataType::Empty => {
                 Ok(crate::spreadsheet::api::CellValue::Empty)
@@ -432,39 +476,39 @@ impl DataTypeUtils {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_cell_reference_parsing() {
         let cell = CellReference::parse("A1").unwrap();
         assert_eq!(cell.column, "A");
         assert_eq!(cell.row, 1);
         assert_eq!(cell.sheet, None);
-        
+
         let cell_with_sheet = CellReference::parse("Sheet1!A1").unwrap();
         assert_eq!(cell_with_sheet.column, "A");
         assert_eq!(cell_with_sheet.row, 1);
         assert_eq!(cell_with_sheet.sheet, Some("Sheet1".to_string()));
     }
-    
+
     #[test]
     fn test_column_index_conversion() {
         let cell = CellReference::parse("A1").unwrap();
         assert_eq!(cell.column_to_index().unwrap(), 0);
-        
+
         let cell = CellReference::parse("Z1").unwrap();
         assert_eq!(cell.column_to_index().unwrap(), 25);
-        
+
         let cell = CellReference::parse("AA1").unwrap();
         assert_eq!(cell.column_to_index().unwrap(), 26);
     }
-    
+
     #[test]
     fn test_index_to_column() {
         assert_eq!(CellReference::index_to_column(0), "A");
         assert_eq!(CellReference::index_to_column(25), "Z");
         assert_eq!(CellReference::index_to_column(26), "AA");
     }
-    
+
     #[test]
     fn test_range_reference_parsing() {
         let range = RangeReference::parse("A1:C10").unwrap();
@@ -472,44 +516,62 @@ mod tests {
         assert_eq!(range.start.row, 1);
         assert_eq!(range.end.column, "C");
         assert_eq!(range.end.row, 10);
-        
+
         assert_eq!(range.column_count().unwrap(), 3);
         assert_eq!(range.row_count(), 10);
         assert_eq!(range.cell_count().unwrap(), 30);
     }
-    
+
     #[test]
     fn test_formula_validation() {
         assert!(FormulaParser::validate_formula("").is_ok());
         assert!(FormulaParser::validate_formula("=A1+B1").is_ok());
         assert!(FormulaParser::validate_formula("=SUM(A1:A10)").is_ok());
         assert!(FormulaParser::validate_formula("=SUM(A1:A10)").is_ok());
-        
+
         assert!(FormulaParser::validate_formula("=SUM(A1:A10").is_err()); // Unbalanced
         assert!(FormulaParser::validate_formula("=SUM(A1:A10))").is_err()); // Unbalanced
     }
-    
+
     #[test]
     fn test_cell_reference_extraction() {
         let references = FormulaParser::extract_cell_references("=A1+B1*C1");
         assert_eq!(references.len(), 3);
-        
+
         let references = FormulaParser::extract_range_references("=SUM(A1:C10)");
         assert_eq!(references.len(), 1);
     }
-    
+
     #[test]
     fn test_data_type_inference() {
-        let values = vec!["1", "2", "3"];
+        let values = vec!["1", "2", "3"]
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
         let data_type = DataTypeUtils::infer_type_from_values(&values);
-        assert!(matches!(data_type, crate::spreadsheet::api::DataType::Number));
-        
-        let values = vec!["true", "false", "yes"];
+        assert!(matches!(
+            data_type,
+            crate::spreadsheet::api::DataType::Number
+        ));
+
+        let values = vec!["true", "false", "yes"]
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
         let data_type = DataTypeUtils::infer_type_from_values(&values);
-        assert!(matches!(data_type, crate::spreadsheet::api::DataType::Boolean));
-        
-        let values = vec!["hello", "world", "test"];
+        assert!(matches!(
+            data_type,
+            crate::spreadsheet::api::DataType::Boolean
+        ));
+
+        let values = vec!["hello", "world", "test"]
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
         let data_type = DataTypeUtils::infer_type_from_values(&values);
-        assert!(matches!(data_type, crate::spreadsheet::api::DataType::String));
+        assert!(matches!(
+            data_type,
+            crate::spreadsheet::api::DataType::String
+        ));
     }
 }
