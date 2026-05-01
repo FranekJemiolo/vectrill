@@ -93,8 +93,6 @@ jobs:
           source .venv/bin/activate
           # Install all dependencies using uv sync (includes dev dependencies)
           uv sync --dev
-          # Ensure all test dependencies are available
-          uv add --dev pytest pytest-asyncio pandas numpy
 
       - name: Build Python package
         run: |

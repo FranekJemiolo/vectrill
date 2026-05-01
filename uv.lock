@@ -2236,6 +2236,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "cffi" },
+    { name = "numpy" },
     { name = "polars" },
     { name = "pyarrow" },
 ]
@@ -2273,6 +2274,7 @@ requires-dist = [
     { name = "jupyter", marker = "extra == 'examples'", specifier = ">=1.0.0" },
     { name = "marimo", marker = "extra == 'examples'", specifier = ">=0.8.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
+    { name = "numpy", specifier = ">=1.24.0" },
     { name = "pandas", marker = "extra == 'dev'", specifier = ">=2.0.0" },
     { name = "polars", specifier = ">=0.20.0" },
     { name = "pyarrow", specifier = ">=14.0.0" },
