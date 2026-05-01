@@ -8,7 +8,7 @@ use std::collections::BinaryHeap;
 use std::sync::Arc;
 
 use super::{
-    config::{LateDataPolicy, Ordering, SequencerConfig},
+    config::{LateDataPolicy, SequencerConfig},
     heap::{Cursor, HeapItem},
 };
 
@@ -229,11 +229,6 @@ impl OptimizedSequencer {
         }
     }
 
-    /// Get key from a batch at a specific row
-    fn get_key(&self, batch: &RecordBatch, row_idx: usize) -> Option<String> {
-        Self::get_key_static(batch, row_idx)
-    }
-
     /// Static helper to get key from a batch
     fn get_key_static(batch: &RecordBatch, row_idx: usize) -> Option<String> {
         if batch.num_columns() > 1 {
@@ -247,11 +242,6 @@ impl OptimizedSequencer {
         } else {
             None
         }
-    }
-
-    /// Get value from a batch at a specific row
-    fn get_value(&self, batch: &RecordBatch, row_idx: usize) -> Option<i64> {
-        Self::get_value_static(batch, row_idx)
     }
 
     /// Static helper to get value from a batch
@@ -273,7 +263,7 @@ impl OptimizedSequencer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sequencer::config::SequencerConfig;
+    use crate::sequencer::config::{Ordering, SequencerConfig};
     use arrow::datatypes::{Field, Schema};
     use std::sync::Arc;
 
