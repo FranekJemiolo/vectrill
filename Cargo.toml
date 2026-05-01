@@ -45,6 +45,10 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Python bindings (for M2+)
 pyo3 = { version = "0.24", features = ["extension-module"], optional = true }
+axum = { version = "0.7", features = ["ws"], optional = true }
+tower = { version = "0.4", optional = true }
+tower-http = { version = "0.5", features = ["cors"], optional = true }
+futures = { version = "0.3", optional = true }
 
 # Google Sheets dependencies (for Google Sheets integration)
 [target.'cfg(not(windows))'.dependencies]
@@ -112,6 +116,10 @@ spreadsheet = ["axum", "tower", "tower-http", "tokio-tungstenite", "uuid", "futu
 
 # Build extension module by default when building with maturin
 extension-module = ["pyo3/extension-module"]
+axum = ["dep:axum"]
+tower = ["dep:tower"]
+tower-http = ["dep:tower-http"]
+futures = ["dep:futures"]
 
 [[bin]]
 name = "vectrill"
@@ -130,10 +138,6 @@ name = "e2e_advanced_features"
 harness = false
 required-features = ["performance"]
 
-[target.'cfg(not(windows))'.test]
-name = "e2e_advanced_features"
-harness = false
-required-features = ["performance"]
 
 [[test]]
 name = "e2e_connectors_comprehensive"

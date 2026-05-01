@@ -199,7 +199,7 @@ async fn spreadsheet_transform(
     Json(SpreadsheetResponse {
         request_id: request.request_id.clone(),
         success: true,
-        data: request.data.clone(),
+        data: Some(request.data.clone()),
         error: None,
         metadata: None,
     })
@@ -227,7 +227,7 @@ async fn spreadsheet_preview(Json(request): Json<SpreadsheetRequest>) -> Json<Sp
     Json(SpreadsheetResponse {
         request_id: request.request_id.clone(),
         success: true,
-        data: request.data.clone(),
+        data: Some(request.data.clone()),
         error: None,
         metadata: None,
     })
