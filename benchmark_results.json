@@ -1,0 +1,4 @@
+    Finished `bench` profile [optimized] target(s) in 0.40s
+     Running unittests src/lib.rs (target/release/deps/vectrill-a1fc180ad420743d)
+error: Unrecognized option: 'output-format'
+error: bench failed, to rerun pass `--lib`

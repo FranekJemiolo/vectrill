@@ -270,21 +270,23 @@ vectrill/
 
 ### Benchmark Results (MacBook Air M2, 16GB RAM)
 
-**Core Engine Performance:**
-- **Sequencer Ingest**: 2.3B rows/sec (100K rows in 43ns)
-- **Operator Processing**: 6.0B rows/sec (PassThrough operator)
-- **Flush Operations**: 8.4B ops/sec (100K rows in 1.2ns)
+**Core Engine Performance (Function Call Overhead):**
+- **Sequencer Ingest**: ~23M batches/sec (100K rows in 43ns per batch)
+- **Operator Processing**: ~60M batches/sec (PassThrough operator)
+- **Flush Operations**: ~820M ops/sec (100K rows in 1.2ns per flush)
 
-**Comparison with Pandas:**
-- **Filter Operations**: ~58x faster than pandas
-- **Group By Aggregations**: ~340x faster than pandas  
-- **Arithmetic Operations**: ~47x faster than pandas
+**Important Note**: Current benchmarks measure **function call overhead**, not actual data processing throughput. The PassThrough operator does no work, and sequencer operations are batch-level operations.
 
-### Performance Characteristics
-- **Zero-Copy Operations**: Arrow-native memory layout enables zero-copy processing
-- **Consistent Latency**: Sub-50ns latency across different data sizes
-- **Memory Efficient**: ~1.2x input memory footprint with buffer pooling
-- **Linear Scaling**: Near-linear performance scaling with data size
+**What We Can Conclude:**
+- **Low Function Call Overhead**: 16-43ns per operation
+- **Efficient Memory Management**: Flush operations ~1ns
+- **Consistent Performance**: Minimal variation across batch sizes
+- **Zero-Copy Foundation**: Arrow format enables efficient data handling
+
+**What We Cannot Conclude:**
+- **Real Data Processing Throughput**: No actual filter/map/aggregation work measured
+- **Comparison with pandas/Arrow**: Different workloads being measured
+- **Real-world Performance**: Synthetic data patterns, no I/O
 
 ### Performance Features
 - **Expression Optimization**: Constant folding and CSE reduce computation overhead
@@ -293,12 +295,12 @@ vectrill/
 - **Performance Counters**: Built-in metrics for monitoring
 
 ### Benchmarks
-Run benchmarks with:
+Run current benchmarks (measuring function call overhead):
 ```bash
 cargo bench --features performance
 ```
 
-Detailed benchmark results are available in [docs/BENCHMARKS.md](docs/BENCHMARKS.md) and on the [GitHub Pages site](https://FranekJemiolo.github.io/vectrill/performance).
+**For accurate performance assessment, we need realistic benchmarks with actual data processing work.** See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for detailed analysis and next steps.
 
 ---
 
