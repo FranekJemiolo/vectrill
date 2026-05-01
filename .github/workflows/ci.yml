@@ -91,11 +91,10 @@ jobs:
         run: |
           uv venv .venv
           source .venv/bin/activate
-          pip install --upgrade pip setuptools wheel
-          pip install cffi
+          # Install all dependencies using uv sync (includes dev dependencies)
           uv sync --dev
-          # Ensure pytest is available
-          pip install pytest
+          # Ensure all test dependencies are available
+          uv add --dev pytest pytest-asyncio pandas numpy
 
       - name: Build Python package
         run: |
@@ -119,4 +118,5 @@ jobs:
       - name: Run Python tests
         run: |
           source .venv/bin/activate
-          pytest tests/python/ -v
+          # Use uv run to ensure proper environment
+          uv run pytest tests/python/ -v
