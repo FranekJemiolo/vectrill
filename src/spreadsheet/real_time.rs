@@ -364,7 +364,10 @@ impl RealTimeProcessor {
             return Ok(());
         }
 
-        println!("Starting real-time processor with config: {:?}", self.config);
+        println!(
+            "Starting real-time processor with config: {:?}",
+            self.config
+        );
 
         // Start processing loop
         let mut last_update = SystemTime::now();
@@ -414,7 +417,8 @@ impl RealTimeProcessor {
 
     /// Process pending transformations
     fn process_pending_transformations(&mut self) -> Result<()> {
-        let pipelines_to_process: Vec<_> = self.pipelines
+        let pipelines_to_process: Vec<_> = self
+            .pipelines
             .values()
             .filter(|pipeline| matches!(pipeline.status, PipelineStatus::Running))
             .cloned()
@@ -423,7 +427,7 @@ impl RealTimeProcessor {
         for pipeline in pipelines_to_process {
             if pipeline.current_step < pipeline.steps.len() {
                 let step = &pipeline.steps[pipeline.current_step];
-                
+
                 // Mock transformation step execution
                 let execution_time = std::time::SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -465,7 +469,7 @@ impl RealTimeProcessor {
     /// Create new transformation pipeline
     pub fn create_pipeline(&mut self, name: &str, steps: Vec<TransformationStep>) -> String {
         let pipeline_id = uuid::Uuid::new_v4().to_string();
-        
+
         let pipeline = TransformationPipeline {
             id: pipeline_id.clone(),
             name: name.to_string(),
@@ -477,9 +481,9 @@ impl RealTimeProcessor {
         };
 
         self.pipelines.insert(pipeline_id.clone(), pipeline);
-        
+
         println!("Created pipeline '{}' with ID '{}'", name, pipeline_id);
-        
+
         pipeline_id
     }
 
@@ -583,7 +587,7 @@ mod tests {
         ];
 
         let pipeline_id = processor.create_pipeline("Test Pipeline", steps);
-        
+
         let pipeline = processor.get_pipeline(&pipeline_id).unwrap();
         assert_eq!(pipeline.name, "Test Pipeline");
         assert_eq!(pipeline.steps.len(), 2);

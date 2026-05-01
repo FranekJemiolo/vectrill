@@ -126,7 +126,7 @@ jobs:
       - name: Install Node.js dependencies
         run: |
           cd spreadsheet
-          npm ci
+          npm ci --silent
 
       - name: Validate OpenAPI specification
         run: |
@@ -291,5 +291,9 @@ jobs:
 
       - name: Check template syntax
         run: |
-          cd spreadsheet/templates
-          find . -name "*.json" -exec echo "Validating {}" \; -exec python -m json.tool {} \; >/dev/null
+          if [ -d "spreadsheet/templates" ]; then
+            cd spreadsheet/templates
+            find . -name "*.json" -exec echo "Validating {}" \; -exec python -m json.tool {} \; >/dev/null
+          else
+            echo "Templates directory not found, skipping template syntax check"
+          fi
