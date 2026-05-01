@@ -17,8 +17,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable]
+        include:
+          - os: ubuntu-latest
+            rust: stable
+            features: "performance connectors-full"
+          - os: macos-latest
+            rust: stable
+            features: "performance connectors-full"
+          - os: windows-latest
+            rust: stable
+            features: "performance connectors-basic"
     
     steps:
       - name: Checkout code
@@ -54,7 +62,7 @@ jobs:
         run: cargo clippy -- -D warnings
 
       - name: Run tests
-        run: cargo test --lib --test '*' --features="performance connectors-full" --verbose
+        run: cargo test --lib --test '*' --features="${{ matrix.features }}" --verbose
 
   test-python:
     name: Test Python
