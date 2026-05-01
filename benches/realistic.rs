@@ -4,25 +4,25 @@ use arrow::record_batch::RecordBatch;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::sync::Arc;
 use vectrill::operators::{FilterOperator, MapOperator, Operator};
-use vectrill::expression::{Expr, ExprType, BinaryOp};
+use vectrill::expression::{Expr, Operator as ExprOp, ScalarValue, create_physical_expr};
 use vectrill::sequencer::{Sequencer, SequencerConfig};
 
 fn create_realistic_batch(size: usize) -> RecordBatch {
     let schema = Arc::new(Schema::new(vec![
         Field::new("id", DataType::Int64, false),
         Field::new("category", DataType::Utf8, false),
-        Field::new("value", DataType::Float64, false),
+        Field::new("value", DataType::Int64, false),
         Field::new("timestamp", DataType::Int64, false),
     ]));
 
     // More realistic data distribution
-    let mut rng = fastrand::Rng::new();
     let categories = ["A", "B", "C", "D", "E"];
     
-    let ids = Int64Array::from_iter((0..size).map(|i| Some(rng.i64(0..1_000_000))));
-    let cats = StringArray::from_iter((0..size).map(|_| Some(categories[rng.usize(0..categories.len())].to_string())));
-    let values = Float64Array::from_iter((0..size).map(|_| Some(rng.f64() * 1000.0)));
-    let timestamps = Int64Array::from_iter((0..size).map(|i| Some((i as i64) * 1000 + rng.i64(0..1000))));
+    // Use deterministic but realistic patterns
+    let ids = Int64Array::from_iter((0..size).map(|i| Some((i as i64 * 7919) % 1_000_000))); // Prime multiplier for distribution
+    let cats = StringArray::from_iter((0..size).map(|i| Some(categories[(i * 7) % categories.len()].to_string())));
+    let values = Int64Array::from_iter((0..size).map(|i| Some(((i as i64 * 31) % 1000) + 100))); // Int64 values 100-1099
+    let timestamps = Int64Array::from_iter((0..size).map(|i| Some((i as i64) * 1000 + ((i as i64 * 37) % 1000))));
 
     RecordBatch::try_new(
         schema,
@@ -42,14 +42,15 @@ fn bench_filter_realistic(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
             let batch = create_realistic_batch(size);
             
-            // Filter: value > 500.0
-            let expr = Expr::Binary {
-                left: Box::new(Expr::Column("value".to_string())),
-                op: BinaryOp::GreaterThan,
-                right: Box::new(Expr::Literal(ExprType::Float64(500.0))),
-            };
+            // Filter: value > 500
+            let expr = Expr::binary(
+                Expr::column("value"),
+                ExprOp::Gt,
+                Expr::literal(ScalarValue::Int64(500)),
+            );
             
-            let mut filter_op = FilterOperator::new(expr);
+            let physical_expr = create_physical_expr(&expr, &batch.schema()).unwrap();
+            let mut filter_op = FilterOperator::new(physical_expr);
 
             b.iter(|| {
                 black_box(filter_op.process(black_box(batch.clone())).unwrap());
@@ -67,18 +68,19 @@ fn bench_map_realistic(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
             let batch = create_realistic_batch(size);
             
-            // Map: value * 2.0 + 10.0
-            let expr = Expr::Binary {
-                left: Box::new(Expr::Binary {
-                    left: Box::new(Expr::Column("value".to_string())),
-                    op: BinaryOp::Multiply,
-                    right: Box::new(Expr::Literal(ExprType::Float64(2.0))),
-                }),
-                op: BinaryOp::Add,
-                right: Box::new(Expr::Literal(ExprType::Float64(10.0))),
-            };
+            // Map: value * 2 + 10
+            let expr = Expr::binary(
+                Expr::binary(
+                    Expr::column("value"),
+                    ExprOp::Mul,
+                    Expr::literal(ScalarValue::Int64(2)),
+                ),
+                ExprOp::Add,
+                Expr::literal(ScalarValue::Int64(10)),
+            );
             
-            let mut map_op = MapOperator::new(expr, "computed_value".to_string());
+            let physical_expr = create_physical_expr(&expr, &batch.schema()).unwrap();
+            let mut map_op = MapOperator::new(vec![("computed_value".to_string(), physical_expr)]);
 
             b.iter(|| {
                 black_box(map_op.process(black_box(batch.clone())).unwrap());
@@ -106,7 +108,7 @@ fn bench_sequencer_realistic(c: &mut Criterion) {
             b.iter(|| {
                 let batch = create_realistic_batch(size);
                 black_box(sequencer.ingest(black_box(batch)).unwrap());
-                // Don't measure flush - just the ingest operation
+                // Don't measure flush - just ingest operation
             });
         });
     }
