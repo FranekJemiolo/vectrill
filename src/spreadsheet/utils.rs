@@ -2,9 +2,9 @@
 //!
 //! Utility functions for working with spreadsheet data and references.
 
-use std::fmt;
 use crate::{error::Result, VectrillError};
 use std::collections::HashMap;
+use std::fmt;
 
 /// Cell reference utilities
 #[derive(Debug, Clone)]
@@ -188,25 +188,13 @@ impl RangeReference {
     pub fn cell_count(&self) -> Result<u32> {
         Ok(self.column_count()? * self.row_count())
     }
-
-    }
+}
 
 impl fmt::Display for RangeReference {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.sheet {
-            Some(sheet) => write!(
-                f,
-                "{}!{}:{}",
-                sheet,
-                self.start,
-                self.end
-            ),
-            None => write!(
-                f,
-                "{}:{}",
-                self.start,
-                self.end
-            ),
+            Some(sheet) => write!(f, "{}!{}:{}", sheet, self.start, self.end),
+            None => write!(f, "{}:{}", self.start, self.end),
         }
     }
 }
@@ -350,7 +338,7 @@ impl FormulaParser {
                 ')' => paren_count -= 1,
                 _ => {}
             }
-            
+
             if paren_count < 0 {
                 return Err(VectrillError::InvalidConfig(
                     "Unbalanced parentheses in formula".to_string(),

@@ -14,7 +14,8 @@ pub mod excel_addin;
 #[cfg(not(windows))]
 pub mod google_sheets;
 
-pub mod real_time;
+// Note: real_time module is disabled until CSV dependency is resolved
+// pub mod real_time;
 
 // Re-export main components
 pub use api::{

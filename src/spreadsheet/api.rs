@@ -398,7 +398,11 @@ impl SpreadsheetAPI {
     }
 
     /// Convert Arrow RecordBatch to spreadsheet data
-    fn arrow_to_spreadsheet(&self, _batch: &crate::RecordBatch, _output: &OutputConfig) -> Result<SpreadsheetData> {
+    fn arrow_to_spreadsheet(
+        &self,
+        _batch: &crate::RecordBatch,
+        _output: &OutputConfig,
+    ) -> Result<SpreadsheetData> {
         // TODO: Implement conversion from Arrow to spreadsheet format
         // This would involve:
         // 1. Extracting headers from schema
