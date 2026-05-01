@@ -5,10 +5,7 @@ use arrow::datatypes::{DataType, Field, Schema};
 #[cfg(feature = "cli")]
 use clap::Parser;
 use std::sync::Arc;
-use vectrill::{
-    operators::{NoOpOperator, Pipeline},
-    RecordBatch,
-};
+use vectrill::RecordBatch;
 
 #[cfg(feature = "cli")]
 #[derive(Parser, Debug)]
@@ -55,17 +52,5 @@ fn process_dummy_batch() {
         .expect("Failed to create batch");
 
     println!("Created batch with {} rows", batch.num_rows());
-
-    println!("Processing through pipeline...");
-    let mut pipeline = Pipeline::new();
-    pipeline.add_operator(Box::new(NoOpOperator));
-
-    let result = pipeline.execute(batch).expect("Pipeline execution failed");
-    println!("Pipeline output: {} rows", result.num_rows());
-
-    println!("Flushing pipeline...");
-    let flushed = pipeline.flush().expect("Flush failed");
-    println!("Flushed {} batches", flushed.len());
-
     println!("Done!");
 }

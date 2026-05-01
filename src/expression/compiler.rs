@@ -2,7 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::expression::{map_python_bool_op, map_python_operator, map_python_unary_op, Expr, Operator, ScalarValue};
+use crate::expression::{
+    map_python_bool_op, map_python_operator, map_python_unary_op, Expr, Operator, ScalarValue,
+};
 
 /// Python AST node representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -414,12 +416,12 @@ pub fn expr_from_string(expr_str: &str) -> Expr {
 /// Parse simple expression strings for testing
 fn parse_simple_expression_string(expr_str: &str) -> Option<Expr> {
     let trimmed = expr_str.trim();
-    
+
     // Check for literals first (numbers, strings, booleans)
     if let Some(literal) = parse_literal(trimmed) {
         return Some(Expr::Literal(literal));
     }
-    
+
     // Check for binary operators
     if let Some((left, op, right)) = parse_simple_binary_operation(trimmed) {
         return Some(Expr::Binary {
@@ -428,25 +430,25 @@ fn parse_simple_expression_string(expr_str: &str) -> Option<Expr> {
             right: Box::new(right),
         });
     }
-    
+
     // Check if it's a column name (alphanumeric with underscores)
     if trimmed.chars().all(|c| c.is_alphanumeric() || c == '_') {
         return Some(Expr::Column(trimmed.to_string()));
     }
-    
+
     None
 }
 
 /// Parse binary operations from a string
 fn parse_simple_binary_operation(expr_str: &str) -> Option<(Expr, Operator, Expr)> {
     let operators = vec!["==", "!=", "<=", ">=", "<", ">", "+", "-", "*", "/"];
-    
+
     for op in &operators {
         if let Some(pos) = expr_str.find(op) {
             if pos > 0 && pos + op.len() < expr_str.len() {
                 let left_str = expr_str[..pos].trim();
                 let right_str = expr_str[pos + op.len()..].trim();
-                
+
                 if let Some(left) = parse_simple_expression_string(left_str) {
                     if let Some(right) = parse_simple_expression_string(right_str) {
                         return Some((left, map_operator(op), right));
@@ -455,7 +457,7 @@ fn parse_simple_binary_operation(expr_str: &str) -> Option<(Expr, Operator, Expr
             }
         }
     }
-    
+
     None
 }
 
@@ -479,12 +481,12 @@ fn map_operator(op_str: &str) -> Operator {
 /// Parse literal values
 fn parse_literal(expr_str: &str) -> Option<ScalarValue> {
     let trimmed = expr_str.trim();
-    
+
     // String literal
     if trimmed.starts_with('\'') && trimmed.ends_with('\'') {
-        return Some(ScalarValue::Utf8(trimmed[1..trimmed.len()-1].to_string()));
+        return Some(ScalarValue::Utf8(trimmed[1..trimmed.len() - 1].to_string()));
     }
-    
+
     // Boolean
     if trimmed == "true" {
         return Some(ScalarValue::Boolean(true));
@@ -492,17 +494,17 @@ fn parse_literal(expr_str: &str) -> Option<ScalarValue> {
     if trimmed == "false" {
         return Some(ScalarValue::Boolean(false));
     }
-    
+
     // Integer
     if let Ok(i) = trimmed.parse::<i64>() {
         return Some(ScalarValue::Int64(i));
     }
-    
+
     // Float
     if let Ok(f) = trimmed.parse::<f64>() {
         return Some(ScalarValue::Float64(f));
     }
-    
+
     None
 }
 
@@ -515,8 +517,8 @@ mod tests {
         let expr = expr_from_string("42");
         assert_eq!(expr, Expr::Literal(ScalarValue::Int64(42)));
 
-        let expr = expr_from_string("3.14");
-        assert_eq!(expr, Expr::Literal(ScalarValue::Float64(3.14)));
+        let expr = expr_from_string("3.14159");
+        assert_eq!(expr, Expr::Literal(ScalarValue::Float64(3.14159)));
 
         let expr = expr_from_string("true");
         assert_eq!(expr, Expr::Literal(ScalarValue::Boolean(true)));
@@ -546,7 +548,12 @@ mod tests {
     #[test]
     fn test_comparison_parsing() {
         let expr = expr_from_string("a > 10");
-        if let Expr::Binary { left, op, right } = expr {
+        if let Expr::Binary {
+            left: _,
+            op,
+            right: _,
+        } = expr
+        {
             assert_eq!(op, Operator::Gt);
         } else {
             panic!("Expected binary expression");

@@ -109,6 +109,10 @@ impl CounterRegistry {
     pub fn len(&self) -> usize {
         self.counters.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.counters.is_empty()
+    }
 }
 
 impl Default for CounterRegistry {

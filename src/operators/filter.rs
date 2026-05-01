@@ -87,13 +87,13 @@ impl FusableOperator for FilterOperator {
     fn expressions(&self) -> Vec<&Expr> {
         vec![]
     }
-    
+
     fn predicate(&self) -> Option<&Expr> {
         // FilterOperator has a predicate but it's a PhysicalExpr, not Expr
         // For fusion purposes, we'd need to convert back to Expr or store the original
         None
     }
-    
+
     fn projection(&self) -> Option<&[String]> {
         None
     }

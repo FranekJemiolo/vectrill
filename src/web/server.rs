@@ -2,8 +2,8 @@
 
 use crate::metrics::MetricsRegistry;
 use axum::{
-    extract::{Path, State, WebSocketUpgrade, ws::Message},
-    response::{Html, Json, IntoResponse},
+    extract::{ws::Message, Path, State, WebSocketUpgrade},
+    response::{Html, IntoResponse, Json},
     routing::get,
     Router,
 };
@@ -100,22 +100,16 @@ async fn get_job_detail(Path(id): Path<String>) -> Json<JobDetail> {
         created_at: chrono::Utc::now().to_rfc3339(),
         query_plan: Some(QueryPlanNode {
             operator: "Scan".to_string(),
-            children: Some(vec![
-                QueryPlanNode {
-                    operator: "Filter".to_string(),
-                    children: Some(vec![
-                        QueryPlanNode {
-                            operator: "Map".to_string(),
-                            children: Some(vec![
-                                QueryPlanNode {
-                                    operator: "Aggregate".to_string(),
-                                    children: None,
-                                },
-                            ]),
-                        },
-                    ]),
-                },
-            ]),
+            children: Some(vec![QueryPlanNode {
+                operator: "Filter".to_string(),
+                children: Some(vec![QueryPlanNode {
+                    operator: "Map".to_string(),
+                    children: Some(vec![QueryPlanNode {
+                        operator: "Aggregate".to_string(),
+                        children: None,
+                    }]),
+                }]),
+            }]),
         }),
     })
 }
@@ -133,13 +127,13 @@ async fn handle_metrics_websocket(
     registry: Arc<MetricsRegistry>,
 ) {
     let mut ticker = interval(Duration::from_secs(1));
-    
+
     loop {
         tokio::select! {
             _ = ticker.tick() => {
                 let metrics = registry.get_metrics().await;
                 let json = serde_json::to_string(&metrics).unwrap_or_else(|_| "[]".to_string());
-                
+
                 if socket.send(Message::Text(json)).await.is_err() {
                     break;
                 }
@@ -162,11 +156,14 @@ async fn handle_metrics_websocket(
 }
 
 /// Run the web server
-pub async fn run_server(addr: &str, registry: Arc<MetricsRegistry>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run_server(
+    addr: &str,
+    registry: Arc<MetricsRegistry>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let app = create_router(registry);
     let listener = tokio::net::TcpListener::bind(addr).await?;
     println!("Web server listening on {}", addr);
-    
+
     axum::serve(listener, app).await?;
     Ok(())
 }

@@ -7,14 +7,14 @@
 pub mod connectors;
 pub mod error;
 pub mod expression;
+pub mod memory;
+pub mod metrics;
 pub mod operators;
 pub mod optimization;
+pub mod performance;
 pub mod planner;
 pub mod sequencer;
 pub mod streaming;
-pub mod memory;
-pub mod metrics;
-pub mod performance;
 
 #[cfg(feature = "cli")]
 pub mod cli;
@@ -25,19 +25,19 @@ pub mod ffi;
 #[cfg(feature = "web-ui")]
 pub mod web;
 
+pub use arrow::datatypes::SchemaRef;
+pub use arrow::record_batch::RecordBatch;
 pub use connectors::{Connector, FileConnector};
 pub use error::{Result, VectrillError};
 pub use expression::{Expr, ExprType, ScalarValue, UnaryOp};
+pub use memory::{global_buffer_pool, BufferPool};
+pub use metrics::{global_registry, Metric, MetricType, MetricsRegistry};
 pub use operators::Operator;
 pub use optimization::{ExprOptimizer, FusedOperator};
-pub use planner::{LogicalPlan, PhysicalPlan, ExecutionGraph};
+pub use performance::{global_counter_registry, Counter, CounterRegistry, CounterType, Timer};
+pub use planner::{ExecutionGraph, LogicalPlan, PhysicalPlan};
 pub use sequencer::Sequencer;
-pub use streaming::{Watermark, window, WindowState};
-pub use metrics::{Metric, MetricType, MetricsRegistry, global_registry};
-pub use memory::{BufferPool, global_buffer_pool};
-pub use performance::{Counter, CounterType, CounterRegistry, Timer, global_counter_registry};
-pub use arrow::datatypes::SchemaRef;
-pub use arrow::record_batch::RecordBatch;
+pub use streaming::{window, Watermark, WindowState};
 
 /// Re-export Arrow for convenience
 pub use arrow;

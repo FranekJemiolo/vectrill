@@ -5,6 +5,5 @@ pub mod fusion;
 
 pub use expr_optimizer::ExprOptimizer;
 pub use fusion::{
-    FusableOperator, FusionSegment, FusedOperator, FusedExpr,
-    is_fusable, is_stateful, is_boundary,
+    is_boundary, is_fusable, is_stateful, FusableOperator, FusedExpr, FusedOperator, FusionSegment,
 };

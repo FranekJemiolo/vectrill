@@ -9,7 +9,7 @@ pub use types::{Metric, MetricType, MetricValue};
 use std::sync::Arc;
 
 /// Global metrics registry instance
-static GLOBAL_REGISTRY: once_cell::sync::Lazy<Arc<MetricsRegistry>> = 
+static GLOBAL_REGISTRY: once_cell::sync::Lazy<Arc<MetricsRegistry>> =
     once_cell::sync::Lazy::new(|| Arc::new(MetricsRegistry::new()));
 
 /// Get the global metrics registry

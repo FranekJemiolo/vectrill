@@ -6,18 +6,11 @@ use std::time::Duration;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WindowSpec {
     /// Tumbling window - non-overlapping windows
-    Tumbling {
-        size: Duration,
-    },
+    Tumbling { size: Duration },
     /// Sliding window - overlapping windows
-    Sliding {
-        size: Duration,
-        slide: Duration,
-    },
+    Sliding { size: Duration, slide: Duration },
     /// Session window - dynamic windows based on gaps
-    Session {
-        gap: Duration,
-    },
+    Session { gap: Duration },
 }
 
 impl WindowSpec {
@@ -45,12 +38,12 @@ impl WindowKey {
     pub fn new(start: i64, end: i64) -> Self {
         Self { start, end }
     }
-    
+
     /// Check if a timestamp falls within this window
     pub fn contains(&self, timestamp: i64) -> bool {
         timestamp >= self.start && timestamp < self.end
     }
-    
+
     /// Calculate the window duration
     pub fn duration(&self) -> i64 {
         self.end - self.start
@@ -102,7 +95,7 @@ pub fn assign_to_window(timestamp: i64, spec: &WindowSpec) -> WindowKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_window_spec_tumbling() {
         let spec = WindowSpec::Tumbling {
@@ -110,7 +103,7 @@ mod tests {
         };
         assert_eq!(spec.size(), Duration::from_secs(10));
     }
-    
+
     #[test]
     fn test_window_spec_sliding() {
         let spec = WindowSpec::Sliding {
@@ -119,14 +112,14 @@ mod tests {
         };
         assert_eq!(spec.size(), Duration::from_secs(10));
     }
-    
+
     #[test]
     fn test_window_key_creation() {
         let key = WindowKey::new(0, 1000);
         assert_eq!(key.start, 0);
         assert_eq!(key.end, 1000);
     }
-    
+
     #[test]
     fn test_window_key_contains() {
         let key = WindowKey::new(0, 1000);
@@ -135,7 +128,7 @@ mod tests {
         assert!(key.contains(0));
         assert!(!key.contains(1000)); // end is exclusive
     }
-    
+
     #[test]
     fn test_assign_to_tumbling_window() {
         let spec = WindowSpec::Tumbling {
@@ -145,7 +138,7 @@ mod tests {
         assert_eq!(key.start, 10000);
         assert_eq!(key.end, 20000);
     }
-    
+
     #[test]
     fn test_assign_to_sliding_window() {
         let spec = WindowSpec::Sliding {

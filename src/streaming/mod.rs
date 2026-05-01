@@ -6,4 +6,4 @@ pub mod window;
 
 pub use state::{AggregateState, WindowState, WindowStateStore};
 pub use watermark::{Watermark, WatermarkTracker};
-pub use window::{WindowSpec, WindowKey, WindowType};
+pub use window::{WindowKey, WindowSpec, WindowType};

@@ -541,12 +541,12 @@ impl PythonDSLCompiler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expression::{Expr, Operator, ScalarValue};
+    use crate::expression::Expr;
     use std::collections::HashMap;
 
     #[test]
     fn test_compiler_creation() {
-        let compiler = PlanCompiler::new();
+        let _compiler = PlanCompiler::new();
         assert!(true); // Just test creation
     }
 

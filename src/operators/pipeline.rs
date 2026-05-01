@@ -143,14 +143,14 @@ mod tests {
 
     #[test]
     fn test_pipeline_empty() {
-        let mut pipeline = Pipeline::new();
+        let pipeline = Pipeline::new();
         assert_eq!(pipeline.len(), 0);
         assert!(pipeline.is_empty());
     }
 
     #[test]
     fn test_pipeline_single_operator() {
-        let mut pipeline = Pipeline::new().add_operator(Box::new(PassThroughOperator));
+        let pipeline = Pipeline::new().add_operator(Box::new(PassThroughOperator));
 
         assert_eq!(pipeline.len(), 1);
         assert!(!pipeline.is_empty());
@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     fn test_pipeline_multiple_operators() {
-        let mut pipeline = Pipeline::new()
+        let pipeline = Pipeline::new()
             .add_operator(Box::new(PassThroughOperator))
             .add_operator(Box::new(PassThroughOperator))
             .add_operator(Box::new(PassThroughOperator));

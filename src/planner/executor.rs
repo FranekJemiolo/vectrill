@@ -5,8 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use crate::error::VectrillError;
-use crate::operators::{FilterOperator, MapOperator};
 use crate::operators::pipeline::{Operator as PipelineOperator, Pipeline};
+use crate::operators::{FilterOperator, MapOperator};
 use crate::planner::physical::PhysicalPlan;
 use crate::RecordBatch;
 
@@ -510,13 +510,12 @@ impl PipelineOperator for PassThroughOperator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::planner::logical::AggFunction;
-    use crate::planner::physical::{PhysicalAggregation, PhysicalPlan};
+    use crate::planner::physical::PhysicalPlan;
     use std::collections::HashMap;
 
     #[test]
     fn test_execution_graph_creation() {
-        let mut graph = ExecutionGraph::new();
+        let graph = ExecutionGraph::new();
         assert_eq!(graph.nodes.len(), 0);
         assert!(graph.roots.is_empty());
         assert!(graph.leaves.is_empty());

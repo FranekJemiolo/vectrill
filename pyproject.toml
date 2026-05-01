@@ -28,6 +28,7 @@ classifiers = [
 dependencies = [
     "polars>=0.20.0",
     "pyarrow>=14.0.0",
+    "cffi>=1.16.0",
 ]
 
 [project.optional-dependencies]
@@ -38,6 +39,7 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0",
     "pandas>=2.0.0",
+    "yamllint>=1.0.0",
 ]
 test = [
     "pytest>=7.0",

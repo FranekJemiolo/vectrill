@@ -25,8 +25,8 @@ impl BufferPool {
     /// Get an array from the pool or create a new one
     pub fn get_array(&self, dtype: &DataType, capacity: usize) -> ArrayRef {
         let mut pools = self.pools.lock().unwrap();
-        let pool = pools.entry(dtype.clone()).or_insert_with(Vec::new);
-        
+        let pool = pools.entry(dtype.clone()).or_default();
+
         // Try to find a suitable buffer
         if let Some(idx) = pool.iter().position(|arr| arr.len() >= capacity) {
             pool.swap_remove(idx)
@@ -40,8 +40,8 @@ impl BufferPool {
     pub fn return_array(&self, array: ArrayRef) {
         let mut pools = self.pools.lock().unwrap();
         let dtype = array.data_type().clone();
-        let pool = pools.entry(dtype).or_insert_with(Vec::new);
-        
+        let pool = pools.entry(dtype).or_default();
+
         if pool.len() < self.max_size_per_pool {
             pool.push(array);
         }
@@ -50,7 +50,7 @@ impl BufferPool {
     /// Create a new array of the given type and capacity
     fn create_array(&self, dtype: &DataType, capacity: usize) -> ArrayRef {
         use arrow::array::*;
-        
+
         match dtype {
             DataType::Boolean => Arc::new(BooleanArray::new_null(capacity)),
             DataType::Int8 => Arc::new(Int8Array::new_null(capacity)),
@@ -87,7 +87,7 @@ impl BufferPool {
             .flat_map(|v| v.iter())
             .map(|arr| arr.get_buffer_memory_size())
             .sum();
-        
+
         PoolStats {
             total_arrays,
             total_bytes,

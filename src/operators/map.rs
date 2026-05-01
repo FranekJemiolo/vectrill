@@ -164,11 +164,11 @@ impl FusableOperator for MapOperator {
         // For fusion purposes, we'd need to convert back to Expr or store the original
         vec![]
     }
-    
+
     fn predicate(&self) -> Option<&Expr> {
         None
     }
-    
+
     fn projection(&self) -> Option<&[String]> {
         None
     }

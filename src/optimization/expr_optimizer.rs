@@ -1,6 +1,6 @@
 //! Expression optimization including constant folding and CSE
 
-use crate::expression::{Expr, ScalarValue, Operator, UnaryOp};
+use crate::expression::{Expr, Operator, ScalarValue, UnaryOp};
 use std::collections::HashMap;
 
 /// Expression optimizer with constant folding and CSE
@@ -26,7 +26,7 @@ impl ExprOptimizer {
     fn optimize_impl(&mut self, expr: Expr) -> Expr {
         // First apply constant folding
         let folded = self.constant_fold(expr);
-        
+
         // Then apply CSE
         self.cse_optimize(folded)
     }
@@ -37,7 +37,7 @@ impl ExprOptimizer {
             Expr::Binary { left, op, right } => {
                 let left_opt = self.constant_fold(*left);
                 let right_opt = self.constant_fold(*right);
-                
+
                 // Try to fold if both operands are literals
                 if let Expr::Literal(left_val) = &left_opt {
                     if let Expr::Literal(right_val) = &right_opt {
@@ -46,7 +46,7 @@ impl ExprOptimizer {
                         }
                     }
                 }
-                
+
                 Expr::Binary {
                     left: Box::new(left_opt),
                     op,
@@ -55,13 +55,13 @@ impl ExprOptimizer {
             }
             Expr::Unary { op, expr } => {
                 let expr_opt = self.constant_fold(*expr);
-                
+
                 if let Expr::Literal(val) = &expr_opt {
                     if let Some(folded) = self.fold_unary_literal(val, &op) {
                         return folded;
                     }
                 }
-                
+
                 Expr::Unary {
                     op,
                     expr: Box::new(expr_opt),
@@ -72,7 +72,12 @@ impl ExprOptimizer {
     }
 
     /// Fold binary operation on literals
-    fn fold_literals(&self, left: &ScalarValue, op: &Operator, right: &ScalarValue) -> Option<Expr> {
+    fn fold_literals(
+        &self,
+        left: &ScalarValue,
+        op: &Operator,
+        right: &ScalarValue,
+    ) -> Option<Expr> {
         match (left, op, right) {
             // Integer arithmetic
             (ScalarValue::Int64(l), Operator::Add, ScalarValue::Int64(r)) => {
@@ -141,35 +146,30 @@ impl ExprOptimizer {
     /// Common subexpression elimination
     fn cse_optimize(&mut self, expr: Expr) -> Expr {
         let key = expr.as_string();
-        
+
         if let Some(cached) = self.cse_cache.get(&key) {
             return cached.clone();
         }
-        
+
         let optimized = match expr {
-            Expr::Binary { left, op, right } => {
-                Expr::Binary {
-                    left: Box::new(self.cse_optimize(*left)),
-                    op,
-                    right: Box::new(self.cse_optimize(*right)),
-                }
-            }
-            Expr::Unary { op, expr } => {
-                Expr::Unary {
-                    op,
-                    expr: Box::new(self.cse_optimize(*expr)),
-                }
-            }
-            Expr::Function { name, args } => {
-                Expr::Function {
-                    name,
-                    args: args.into_iter().map(|arg| self.cse_optimize(arg)).collect(),
-                }
-            }
+            Expr::Binary { left, op, right } => Expr::Binary {
+                left: Box::new(self.cse_optimize(*left)),
+                op,
+                right: Box::new(self.cse_optimize(*right)),
+            },
+            Expr::Unary { op, expr } => Expr::Unary {
+                op,
+                expr: Box::new(self.cse_optimize(*expr)),
+            },
+            Expr::Function { name, args } => Expr::Function {
+                name,
+                args: args.into_iter().map(|arg| self.cse_optimize(arg)).collect(),
+            },
             _ => expr,
         };
-        
-        self.cse_cache.insert(optimized.as_string(), optimized.clone());
+
+        self.cse_cache
+            .insert(optimized.as_string(), optimized.clone());
         optimized
     }
 }

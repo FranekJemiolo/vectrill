@@ -2,4 +2,4 @@
 
 pub mod counters;
 
-pub use counters::{Counter, CounterType, CounterRegistry, Timer, global_counter_registry};
+pub use counters::{global_counter_registry, Counter, CounterRegistry, CounterType, Timer};
