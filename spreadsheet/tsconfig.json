@@ -34,10 +34,10 @@
     }
   },
   "include": [
-    "src/**/*",
-    "api/**/*",
-    "templates/**/*",
-    "tests/**/*"
+    "src/**/*.ts",
+    "api/**/*.ts",
+    "templates/**/*.ts",
+    "tests/**/*.ts"
   ],
   "exclude": [
     "node_modules",

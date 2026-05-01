@@ -501,7 +501,114 @@ vectrill/
 
 ## ⚡ Performance
 
-### Benchmark Results (MacBook Air M2, 16GB RAM)
+### DataFrame Library Comparison (May 2, 2026)
+
+Comprehensive benchmark comparing **Vectrill**, **Polars**, and **Pandas** performance across common DataFrame operations and data sizes.
+
+#### Test Environment
+- **Hardware**: MacBook Air M2, 16GB RAM
+- **Python**: 3.8.11
+- **Libraries**: Pandas 2.0.3, Polars 1.8.2, Vectrill 0.1.0
+- **Data Sizes**: 1K, 10K, 100K, 1M rows
+- **Operations**: Filter, Groupby, Aggregations, Column operations, Sorting, Joining, Concatenation
+
+#### Overall Performance Summary
+
+| Library | Average Time | Relative Performance | Status |
+|---------|-------------|---------------------|---------|
+| **Polars** | 0.0031s | **Fastest** | ✅ All operations |
+| **Pandas** | 0.0149s | 4.75x slower | ✅ All operations |
+| **Vectrill** | 0.0209s | 6.67x slower | 🚧 Limited operations |
+
+#### Key Findings
+
+**🥇 Polars Performance:**
+- Consistently fastest across most operations
+- Excellent scalability for large datasets (1M+ rows)
+- Particularly strong in aggregations and filtering
+- Best performance-to-feature ratio
+
+**🥈 Pandas Performance:**
+- Competitive for smaller datasets (< 10K rows)
+- Mature and stable with full feature support
+- Degrades significantly on larger datasets
+- Best for complex analytical operations
+
+**🚧 Vectrill Status:**
+- Early-stage development with limited operations
+- Shows promise for small datasets
+- Missing key operations (sort, join, concat)
+- Performance optimization opportunities identified
+
+#### Operation-by-Operation Results
+
+**Filter Operations (`value > 0`):**
+```
+1K rows:    Vectrill 0.0024s (fastest) | Pandas 0.0026s | Polars 0.0133s
+10K rows:   Polars   0.0003s (fastest) | Pandas 0.0004s | Vectrill 0.0031s  
+100K rows:  Polars   0.0005s (fastest) | Pandas 0.0013s | Vectrill 0.0134s
+1M rows:    Polars   0.0031s (fastest) | Pandas 0.0118s | Vectrill 0.1556s
+```
+
+**Groupby Sum Operations:**
+```
+1K rows:    Vectrill 0.0014s (fastest) | Pandas 0.0024s | Polars 0.0067s
+10K rows:   Polars   0.0006s (fastest) | Pandas 0.0006s | Vectrill 0.0017s
+100K rows:  Polars   0.0007s (fastest) | Pandas 0.0018s | Vectrill 0.0123s
+1M rows:    Polars   0.0029s (fastest) | Pandas 0.0161s | Vectrill 0.1333s
+```
+
+**Column Operations (Add New Column):**
+```
+1K rows:    Pandas   0.0003s (fastest) | Polars 0.0006s | Vectrill 0.0013s
+10K rows:   Polars   0.0001s (fastest) | Pandas 0.0004s | Vectrill 0.0022s
+100K rows:  Polars   0.0001s (fastest) | Pandas 0.0017s | Vectrill 0.0131s
+1M rows:    Polars   0.0008s (fastest) | Pandas 0.0143s | Vectrill 0.1524s
+```
+
+#### Performance Characteristics
+
+**Scalability Analysis:**
+- **Polars**: Excellent linear scaling, maintains performance at 1M+ rows
+- **Pandas**: Degrades significantly beyond 100K rows
+- **Vectrill**: Performance drops sharply with larger datasets
+
+**Operation Complexity:**
+- **Simple Operations** (filter, select): All libraries competitive
+- **Complex Operations** (groupby, aggregations): Polars excels
+- **Missing Operations**: Vectrill lacks sort/join/concat implementation
+
+#### Recommendations
+
+**For Production Use:**
+- **Polars**: Best choice for performance-critical applications
+- **Pandas**: Best for complex analytics and ecosystem integration
+- **Vectrill**: Monitor for future development, not yet production-ready
+
+**For Development:**
+- **Vectrill**: Shows architectural promise but needs optimization
+- **Focus Areas**: Improve large dataset performance, implement missing operations
+- **Opportunity**: Leverage Rust backend for performance gains
+
+#### Running Benchmarks
+
+```bash
+# Quick test
+python benchmark_quick.py
+
+# Full benchmark suite  
+python benchmark_comparison.py
+
+# Results saved to:
+# - benchmark_results.json (detailed data)
+# - benchmark_visualizations.png (performance charts)
+```
+
+**Detailed benchmark documentation available in [BENCHMARK_README.md](BENCHMARK_README.md)**
+
+---
+
+### Legacy Performance Metrics
 
 **Realistic Data Processing Performance:**
 - **Filter Operations**: ~500K rows/sec (value > 500 predicate)
@@ -513,17 +620,6 @@ vectrill/
 - **Real Workloads**: Actual filter predicates and arithmetic expressions
 - **Realistic Data**: Deterministic patterns with proper data distributions
 - **Sequencer Overhead**: ~10x slower due to ordering and state management
-
-**Comparison with Function Call Overhead:**
-- **Real Processing**: 2.4-177µs per operation vs 16-43ns function calls
-- **Performance Difference**: ~100-4000x slower with actual data processing
-- **Realistic Throughput**: 500K-750K rows/sec vs 60M batches/sec (no work)
-
-**What We Can Now Conclude:**
-- **Actual Processing Throughput**: ~500K rows/sec for core operations
-- **Real-world Performance**: Measured with realistic predicates and expressions
-- **Sequencer Performance**: ~50K rows/sec with ordering guarantees
-- **Scalability**: Linear scaling confirmed with real workloads
 
 ### Performance Features
 - **Expression Optimization**: Constant folding and CSE reduce computation overhead

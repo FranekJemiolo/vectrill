@@ -1,0 +1,3 @@
+# Additional dependencies for benchmark comparison
+matplotlib>=3.7.0
+seaborn>=0.12.0
