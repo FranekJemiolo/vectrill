@@ -378,8 +378,12 @@ class VectrillDataFrame:
             # Handle nested expressions by evaluating them first
             if hasattr(expression.left, 'name') and expression.left.name in df.columns:
                 left_val = df[expression.left.name]
-            elif isinstance(expression.left, (BinaryExpression, ArithmeticExpression)):
-                # Evaluate nested expression
+            elif isinstance(expression.left, (BinaryExpression, ArithmeticExpression)) or \
+                 (hasattr(expression.left, 'name') and isinstance(expression.left.name, str) and \
+                  (expression.left.name.startswith("pow(") or expression.left.name.startswith("abs(") or 
+                   expression.left.name.startswith("sqrt(") or expression.left.name.startswith("round(") or
+                   expression.left.name.startswith("floor(") or expression.left.name.startswith("ceil("))):
+                # Evaluate nested expression (including arithmetic functions)
                 left_temp_name = f"_temp_left_{name}"
                 left_table = self._apply_rust_expression(expression.left, left_temp_name)
                 left_df = left_table.to_pandas()
@@ -392,8 +396,12 @@ class VectrillDataFrame:
             
             if hasattr(expression.right, 'name') and expression.right.name in df.columns:
                 right_val = df[expression.right.name]
-            elif isinstance(expression.right, (BinaryExpression, ArithmeticExpression)):
-                # Evaluate nested expression
+            elif isinstance(expression.right, (BinaryExpression, ArithmeticExpression)) or \
+                 (hasattr(expression.right, 'name') and isinstance(expression.right.name, str) and \
+                  (expression.right.name.startswith("pow(") or expression.right.name.startswith("abs(") or 
+                   expression.right.name.startswith("sqrt(") or expression.right.name.startswith("round(") or
+                   expression.right.name.startswith("floor(") or expression.right.name.startswith("ceil("))):
+                # Evaluate nested expression (including arithmetic functions)
                 right_temp_name = f"_temp_right_{name}"
                 right_table = self._apply_rust_expression(expression.right, right_temp_name)
                 right_df = right_table.to_pandas()
@@ -982,14 +990,32 @@ class VectrillDataFrame:
                     inner = expr_name[13:-1]
                     parts = inner.split(", ")
                     col_name = parts[0].strip()
-                    window_size = int(parts[1].strip()) if len(parts) > 1 else 5
+                    # Handle both integer and string window sizes
+                    if len(parts) > 1:
+                        window_str = parts[1].strip()
+                        try:
+                            window_size = int(window_str)
+                        except ValueError:
+                            # Keep as string for time-based windows
+                            window_size = window_str
+                    else:
+                        window_size = 5
                     window_func = 'rolling_mean'
                 elif expr_name.startswith("rolling_std("):
                     # Parse rolling_std(column, window_size)
                     inner = expr_name[12:-1]
                     parts = inner.split(", ")
                     col_name = parts[0].strip()
-                    window_size = int(parts[1].strip()) if len(parts) > 1 else 5
+                    # Handle both integer and string window sizes
+                    if len(parts) > 1:
+                        window_str = parts[1].strip()
+                        try:
+                            window_size = int(window_str)
+                        except ValueError:
+                            # Keep as string for time-based windows
+                            window_size = window_str
+                    else:
+                        window_size = 5
                     window_func = 'rolling_std'
                 elif expr_name == "sum_when":
                     # Handle sum_when window function
@@ -1220,9 +1246,63 @@ class VectrillDataFrame:
                             # For std without order by, use transform to get same value for all rows
                             df[name] = df.groupby(partition_cols)[col_name].transform('std')
                         elif window_func == 'rolling_mean':
-                            df[name] = df.groupby(partition_cols)[col_name].transform(lambda x: x.rolling(window=window_size, min_periods=1).mean())
+                            if isinstance(window_size, str):
+                                # Time-based rolling window - need timestamp as index
+                                if order_cols and any(col in df.columns for col in order_cols):
+                                    # Find timestamp column
+                                    timestamp_col = None
+                                    for col in order_cols:
+                                        if col in df.columns and 'timestamp' in col.lower():
+                                            timestamp_col = col
+                                            break
+                                    
+                                    if timestamp_col:
+                                        # Apply time-based rolling with proper index handling
+                                        def time_based_rolling(group):
+                                            group_sorted = group.sort_values(timestamp_col)
+                                            group_sorted = group_sorted.set_index(timestamp_col)
+                                            result = group_sorted[col_name].rolling(window=window_size, min_periods=1).mean()
+                                            return result.reset_index(drop=True)
+                                        
+                                        df[name] = df.groupby(partition_cols).apply(time_based_rolling).reset_index(level=0, drop=True)
+                                    else:
+                                        # Fallback to integer window if no timestamp found
+                                        df[name] = df.groupby(partition_cols)[col_name].transform(lambda x: x.rolling(window=5, min_periods=1).mean())
+                                else:
+                                    # No order columns, fallback to integer window
+                                    df[name] = df.groupby(partition_cols)[col_name].transform(lambda x: x.rolling(window=5, min_periods=1).mean())
+                            else:
+                                # Integer window size
+                                df[name] = df.groupby(partition_cols)[col_name].transform(lambda x: x.rolling(window=window_size, min_periods=1).mean())
                         elif window_func == 'rolling_std':
-                            df[name] = df.groupby(partition_cols)[col_name].transform(lambda x: x.rolling(window=window_size, min_periods=1).std())
+                            if isinstance(window_size, str):
+                                # Time-based rolling window - need timestamp as index
+                                if order_cols and any(col in df.columns for col in order_cols):
+                                    # Find timestamp column
+                                    timestamp_col = None
+                                    for col in order_cols:
+                                        if col in df.columns and 'timestamp' in col.lower():
+                                            timestamp_col = col
+                                            break
+                                    
+                                    if timestamp_col:
+                                        # Apply time-based rolling with proper index handling
+                                        def time_based_rolling_std(group):
+                                            group_sorted = group.sort_values(timestamp_col)
+                                            group_sorted = group_sorted.set_index(timestamp_col)
+                                            result = group_sorted[col_name].rolling(window=window_size, min_periods=1).std()
+                                            return result.reset_index(drop=True)
+                                        
+                                        df[name] = df.groupby(partition_cols).apply(time_based_rolling_std).reset_index(level=0, drop=True)
+                                    else:
+                                        # Fallback to integer window if no timestamp found
+                                        df[name] = df.groupby(partition_cols)[col_name].transform(lambda x: x.rolling(window=5, min_periods=1).std())
+                                else:
+                                    # No order columns, fallback to integer window
+                                    df[name] = df.groupby(partition_cols)[col_name].transform(lambda x: x.rolling(window=5, min_periods=1).std())
+                            else:
+                                # Integer window size
+                                df[name] = df.groupby(partition_cols)[col_name].transform(lambda x: x.rolling(window=window_size, min_periods=1).std())
                         elif window_func == 'count':
                             df[name] = df.groupby(partition_cols).cumcount() + 1
                         elif window_func == 'sum_when':
