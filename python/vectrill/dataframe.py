@@ -667,7 +667,28 @@ class VectrillDataFrame:
                         raise ValueError(f"Column '{else_val.name}' not found in DataFrame")
                 elif isinstance(else_val, (BinaryExpression, ArithmeticExpression)):
                     # Evaluate arithmetic expression
-                    if hasattr(else_val, 'left') and hasattr(else_val, 'right') and hasattr(else_val, 'op'):
+                    if isinstance(else_val, ArithmeticExpression):
+                        # Handle ArithmeticExpression (col, op, value)
+                        col_expr = else_val.col
+                        right_val = else_val.value
+                        op = else_val.op
+                        
+                        if hasattr(col_expr, 'name') and col_expr.name in df.columns:
+                            left_data = df[col_expr.name]
+                            if op == "*":
+                                else_val = left_data * right_val
+                            elif op == "+":
+                                else_val = left_data + right_val
+                            elif op == "-":
+                                else_val = left_data - right_val
+                            elif op == "/":
+                                else_val = left_data / right_val
+                            else:
+                                else_val = else_val
+                        else:
+                            raise ValueError(f"Column '{col_expr.name}' not found in DataFrame")
+                    elif hasattr(else_val, 'left') and hasattr(else_val, 'right') and hasattr(else_val, 'op'):
+                        # Handle BinaryExpression (left, right, op)
                         left_col = else_val.left
                         right_val = else_val.right
                         op = else_val.op
@@ -704,7 +725,28 @@ class VectrillDataFrame:
                             raise ValueError(f"Column '{then_val.name}' not found in DataFrame")
                     elif isinstance(then_val, (BinaryExpression, ArithmeticExpression)):
                         # Evaluate arithmetic expression
-                        if hasattr(then_val, 'left') and hasattr(then_val, 'right') and hasattr(then_val, 'op'):
+                        if isinstance(then_val, ArithmeticExpression):
+                            # Handle ArithmeticExpression (col, op, value)
+                            col_expr = then_val.col
+                            right_val = then_val.value
+                            op = then_val.op
+                            
+                            if hasattr(col_expr, 'name') and col_expr.name in df.columns:
+                                left_data = df[col_expr.name]
+                                if op == "*":
+                                    evaluated_then_val = left_data * right_val
+                                elif op == "+":
+                                    evaluated_then_val = left_data + right_val
+                                elif op == "-":
+                                    evaluated_then_val = left_data - right_val
+                                elif op == "/":
+                                    evaluated_then_val = left_data / right_val
+                                else:
+                                    evaluated_then_val = then_val
+                            else:
+                                raise ValueError(f"Column '{col_expr.name}' not found in DataFrame")
+                        elif hasattr(then_val, 'left') and hasattr(then_val, 'right') and hasattr(then_val, 'op'):
+                            # Handle BinaryExpression (left, right, op)
                             left_col = then_val.left
                             right_val = then_val.right
                             op = then_val.op
@@ -1522,10 +1564,14 @@ class WhenExpression:
             self.then_values[-1] = then_value
         return self
     
-    def when(self, condition, then_value) -> 'WhenExpression':
+    def when(self, condition, then_value=None) -> 'WhenExpression':
         """Chain another when-then"""
         self.conditions.append(condition)
-        self.then_values.append(then_value)
+        if then_value is not None:
+            self.then_values.append(then_value)
+        else:
+            # Add placeholder for then_value, will be set by subsequent .then() call
+            self.then_values.append(None)
         return self
     
     def otherwise(self, else_value) -> 'WhenExpression':
