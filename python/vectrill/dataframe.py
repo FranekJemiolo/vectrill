@@ -5,6 +5,7 @@ import polars as pl
 import numpy as np
 from typing import Any, Union, Optional
 import pyarrow as pa
+from .functions import ColumnExpression, ArithmeticExpression, BinaryExpression, WhenExpression
 try:
     from ._rust import ffi
     RUST_AVAILABLE = True
@@ -12,140 +13,6 @@ except ImportError:
     RUST_AVAILABLE = False
 
 
-class ColumnExpression:
-    """Column expression for filtering and operations"""
-    
-    def __init__(self, name: str):
-        self.name = name
-        self.alias_name = None
-    
-    def alias(self, name: str) -> 'ColumnExpression':
-        """Set alias for the expression"""
-        self.alias_name = name
-        return self
-    
-    def over(self, window_transform) -> 'ColumnExpression':
-        """Window function specification using new WindowTransform"""
-        # Handle WindowTransform objects
-        if hasattr(window_transform, 'to_rust_spec'):
-            return WindowExpression(self, window_transform)
-        elif hasattr(window_transform, 'partition_columns') or hasattr(window_transform, 'order_columns'):
-            # Handle legacy compatibility
-            return WindowExpression(self, window_transform)
-        else:
-            # Handle direct calls
-            return WindowExpression(self, window_transform)
-    
-    def __gt__(self, other: Any) -> dict:
-        """Greater than comparison"""
-        return {"op": ">", "col": self.name, "value": other}
-    
-    def __lt__(self, other: Any) -> dict:
-        """Less than comparison"""
-        return {"op": "<", "col": self.name, "value": other}
-    
-    def __eq__(self, other: Any) -> dict:
-        """Equality comparison"""
-        return {"op": "==", "col": self.name, "value": other}
-    
-    def __ne__(self, other: Any) -> dict:
-        """Inequality comparison"""
-        return {"op": "!=", "col": self.name, "value": other}
-    
-    def __ge__(self, other: Any) -> dict:
-        """Greater than or equal comparison"""
-        return {"op": ">=", "col": self.name, "value": other}
-    
-    def __le__(self, other: Any) -> dict:
-        """Less than or equal comparison"""
-        return {"op": "<=", "col": self.name, "value": other}
-    
-    def __add__(self, other: Any) -> 'ColumnExpression':
-        """Addition operation"""
-        if isinstance(other, ColumnExpression):
-            return BinaryExpression(self, "+", other)
-        else:
-            return ArithmeticExpression(self, "+", other)
-    
-    def __mul__(self, other: Any) -> 'ColumnExpression':
-        """Multiplication operation"""
-        if isinstance(other, ColumnExpression):
-            return BinaryExpression(self, "*", other)
-        else:
-            return ArithmeticExpression(self, "*", other)
-    
-    def __sub__(self, other: Any) -> 'ColumnExpression':
-        """Subtraction operation"""
-        if isinstance(other, ColumnExpression):
-            return BinaryExpression(self, "-", other)
-        else:
-            return ArithmeticExpression(self, "-", other)
-    
-    def __truediv__(self, other: Any) -> 'ColumnExpression':
-        """Division operation"""
-        if isinstance(other, ColumnExpression):
-            return BinaryExpression(self, "/", other)
-        else:
-            return ArithmeticExpression(self, "/", other)
-    
-    def __floordiv__(self, other: Any) -> 'ColumnExpression':
-        """Floor division operation"""
-        if isinstance(other, ColumnExpression):
-            return BinaryExpression(self, "//", other)
-        else:
-            return ArithmeticExpression(self, "//", other)
-    
-    def __mod__(self, other: Any) -> 'ColumnExpression':
-        """Modulo operation"""
-        if isinstance(other, ColumnExpression):
-            return BinaryExpression(self, "%", other)
-        else:
-            return ArithmeticExpression(self, "%", other)
-    
-    def __pow__(self, other: Any) -> 'ColumnExpression':
-        """Power operation"""
-        if isinstance(other, ColumnExpression):
-            return BinaryExpression(self, "**", other)
-        else:
-            return ArithmeticExpression(self, "**", other)
-    
-    def cumsum(self) -> 'ColumnExpression':
-        """Cumulative sum function"""
-        return ColumnExpression(f"cumsum({self.name})")
-    
-    def is_null(self) -> 'ColumnExpression':
-        """Check if column values are null"""
-        return ColumnExpression(f"is_null({self.name})")
-
-
-class BinaryExpression:
-    """Binary expression between two columns"""
-    
-    def __init__(self, left: ColumnExpression, op: str, right: ColumnExpression):
-        self.left = left
-        self.op = op
-        self.right = right
-        self.alias_name = None
-    
-    def alias(self, name: str) -> 'BinaryExpression':
-        """Set alias for the expression"""
-        self.alias_name = name
-        return self
-
-
-class ArithmeticExpression:
-    """Arithmetic expression between column and value"""
-    
-    def __init__(self, col: ColumnExpression, op: str, value: Any):
-        self.col = col
-        self.op = op
-        self.value = value
-        self.alias_name = None
-    
-    def alias(self, name: str) -> 'ArithmeticExpression':
-        """Set alias for the expression"""
-        self.alias_name = name
-        return self
 
 
 class WindowExpression:
@@ -273,9 +140,23 @@ class VectrillDataFrame:
         
         # Handle ColumnExpression - just copy the column data
         if isinstance(expression, ColumnExpression):
-            if expression.name in df.columns:
-                df[name] = df[expression.name]
-            elif expression.name == "abs":
+            expr_name = expression.name
+            
+            # Handle function expressions first
+            if expr_name.startswith("pow(") and expr_name.endswith(")"):
+                # Parse pow(column, exponent)
+                inner = expr_name[4:-1]
+                parts = inner.split(", ")
+                col_name = parts[0].strip()
+                try:
+                    exponent = int(parts[1].strip())
+                    if col_name in df.columns:
+                        df[name] = df[col_name] ** exponent
+                    else:
+                        raise ValueError(f"Column '{col_name}' not found in DataFrame")
+                except ValueError:
+                    raise ValueError(f"Invalid exponent in pow function: {expr_name}")
+            elif expr_name == "abs":
                 # Handle abs function - need to get the column from the nested expression
                 if hasattr(expression, 'nested_expr') and expression.nested_expr:
                     col_name = expression.nested_expr.name
@@ -285,16 +166,16 @@ class VectrillDataFrame:
                         raise ValueError(f"Column '{col_name}' not found in DataFrame")
                 else:
                     raise ValueError("abs function requires a column argument")
-            elif expression.name.startswith("var("):
+            elif expr_name.startswith("var("):
                 # Handle var function
-                col_name = expression.name[4:-1]
+                col_name = expr_name[4:-1]
                 if col_name in df.columns:
                     df[name] = df[col_name].var()
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
-            elif expression.name.startswith("round("):
+            elif expr_name.startswith("round("):
                 # Handle round function
-                inner = expression.name[6:-1]
+                inner = expr_name[6:-1]
                 parts = inner.split(", ")
                 col_name = parts[0].strip()
                 decimals = int(parts[1]) if len(parts) > 1 else 0
@@ -302,124 +183,230 @@ class VectrillDataFrame:
                     df[name] = df[col_name].round(decimals)
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
-            elif expression.name.startswith("floor("):
+            elif expr_name.startswith("floor("):
                 # Handle floor function
-                col_name = expression.name[6:-1]
+                col_name = expr_name[6:-1]
                 if col_name in df.columns:
                     df[name] = np.floor(df[col_name])
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
-            elif expression.name.startswith("ceil("):
+            elif expr_name.startswith("ceil("):
                 # Handle ceil function
-                col_name = expression.name[5:-1]
+                col_name = expr_name[5:-1]
                 if col_name in df.columns:
                     df[name] = np.ceil(df[col_name])
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
-            elif expression.name.startswith("length("):
+            elif expr_name.startswith("length("):
                 # Handle length function
-                col_name = expression.name[7:-1]
+                col_name = expr_name[7:-1]
                 if col_name in df.columns:
                     df[name] = df[col_name].str.len()
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
-            elif expression.name.startswith("upper("):
+            elif expr_name.startswith("upper("):
                 # Handle upper function
-                col_name = expression.name[6:-1]
+                col_name = expr_name[6:-1]
                 if col_name in df.columns:
                     df[name] = df[col_name].str.upper()
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
-            elif expression.name.startswith("std("):
+            elif expr_name.startswith("std("):
                 # Handle std function
-                col_name = expression.name[4:-1]
+                col_name = expr_name[4:-1]
                 if col_name in df.columns:
                     df[name] = df[col_name].std()
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
-            elif expression.name.startswith("mean("):
+            elif expr_name.startswith("mean("):
                 # Handle mean function
-                col_name = expression.name[5:-1]
+                col_name = expr_name[5:-1]
                 if col_name in df.columns:
                     df[name] = df[col_name].mean()
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
-            elif expression.name.startswith("sum("):
+            elif expr_name.startswith("sum("):
                 # Handle sum function
-                col_name = expression.name[4:-1]
+                col_name = expr_name[4:-1]
                 if col_name in df.columns:
                     df[name] = df[col_name].sum()
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
-            elif expression.name.startswith("min("):
+            elif expr_name.startswith("min("):
                 # Handle min function
-                col_name = expression.name[4:-1]
+                col_name = expr_name[4:-1]
                 if col_name in df.columns:
                     df[name] = df[col_name].min()
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
-            elif expression.name.startswith("max("):
+            elif expr_name.startswith("max("):
                 # Handle max function
-                col_name = expression.name[4:-1]
+                col_name = expr_name[4:-1]
                 if col_name in df.columns:
                     df[name] = df[col_name].max()
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
-            elif expression.name.startswith("median("):
+            elif expr_name.startswith("median("):
                 # Handle median function
-                col_name = expression.name[7:-1]
+                col_name = expr_name[7:-1]
                 if col_name in df.columns:
                     df[name] = df[col_name].median()
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
-            elif expression.name.startswith("count("):
+            elif expr_name.startswith("count("):
                 # Handle count function
-                col_name = expression.name[6:-1]
+                col_name = expr_name[6:-1]
                 if col_name in df.columns:
                     df[name] = df[col_name].count()
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
-            elif expression.name == "count()":
+            elif expr_name == "count()":
                 # Handle count function without column
                 df[name] = len(df)
+            elif expr_name.startswith("coalesce(") and expr_name.endswith(")"):
+                # Parse coalesce(column, default)
+                inner = expr_name[9:-1]
+                parts = inner.split(", ")
+                col_name = parts[0].strip()
+                default = parts[1].strip().strip('\"\'')
+                
+                # Check if default is a column reference or a literal value
+                if default in df.columns:
+                    # Default is a column reference - use column values where null
+                    df[name] = np.where(df[col_name].isna(), df[default], df[col_name])
+                else:
+                    # Default is a literal value - try to convert to number if possible
+                    try:
+                        if '.' in default:
+                            default_val = float(default)
+                        else:
+                            default_val = int(default)
+                    except ValueError:
+                        default_val = default
+                    
+                    if col_name in df.columns:
+                        df[name] = df[col_name].fillna(default_val)
+                    else:
+                        raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expr_name == "sqrt":
+                # Handle sqrt function with nested expression
+                if hasattr(expression, 'nested_expr') and expression.nested_expr:
+                    # First evaluate the nested expression
+                    temp_name = f"_temp_nested_{name}"
+                    temp_table = self._apply_rust_expression(expression.nested_expr, temp_name)
+                    temp_df = temp_table.to_pandas()
+                    if temp_name in temp_df.columns:
+                        df[name] = np.sqrt(temp_df[temp_name])
+                    else:
+                        raise ValueError(f"Failed to evaluate nested expression for sqrt")
+                elif hasattr(expression, 'left') and isinstance(expression.left, ArithmeticExpression):
+                    # Handle ArithmeticExpression as nested expression
+                    temp_name = f"_temp_nested_{name}"
+                    temp_table = self._apply_rust_expression(expression.left, temp_name)
+                    temp_df = temp_table.to_pandas()
+                    if temp_name in temp_df.columns:
+                        df[name] = np.sqrt(temp_df[temp_name])
+                    else:
+                        raise ValueError(f"Failed to evaluate left expression for sqrt")
+                elif hasattr(expression, 'right') and isinstance(expression.right, ArithmeticExpression):
+                    # Handle ArithmeticExpression as nested expression
+                    temp_name = f"_temp_nested_{name}"
+                    temp_table = self._apply_rust_expression(expression.right, temp_name)
+                    temp_df = temp_table.to_pandas()
+                    if temp_name in temp_df.columns:
+                        df[name] = np.sqrt(temp_df[temp_name])
+                    else:
+                        raise ValueError(f"Failed to evaluate right expression for sqrt")
+                else:
+                    raise ValueError("sqrt function requires a valid expression")
+            elif expression.name in df.columns:
+                # Handle simple column reference
+                df[name] = df[expression.name]
+            elif isinstance(expression, ArithmeticExpression):
+                # Handle ArithmeticExpression (like pow(a, 2))
+                col_name = expression.col.name
+                op = expression.op
+                value = expression.value
+                
+                if col_name in df.columns:
+                    if op == "**":
+                        df[name] = df[col_name] ** value
+                    else:
+                        df[name] = df[col_name] + value
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
             else:
                 raise ValueError(f"Column '{expression.name}' not found in DataFrame")
         
         # Handle BinaryExpression - operations between two columns
         elif isinstance(expression, BinaryExpression):
-            left_col = expression.left.name
-            right_col = expression.right.name
+            # Handle nested expressions by evaluating them first
+            if hasattr(expression.left, 'name') and expression.left.name in df.columns:
+                left_val = df[expression.left.name]
+            else:
+                # Evaluate nested expression
+                left_temp_name = f"_temp_left_{name}"
+                left_table = self._apply_rust_expression(expression.left, left_temp_name)
+                left_df = left_table.to_pandas()
+                if left_temp_name in left_df.columns:
+                    left_val = left_df[left_temp_name]
+                else:
+                    left_val = None
+            
+            if hasattr(expression.right, 'name') and expression.right.name in df.columns:
+                right_val = df[expression.right.name]
+            else:
+                # Evaluate nested expression
+                right_temp_name = f"_temp_right_{name}"
+                right_table = self._apply_rust_expression(expression.right, right_temp_name)
+                right_df = right_table.to_pandas()
+                if right_temp_name in right_df.columns:
+                    right_val = right_df[right_temp_name]
+                else:
+                    right_val = None
+            
             op = expression.op
             
-            if left_col in df.columns and right_col in df.columns:
-                if op == "-":
-                    result = df[left_col] - df[right_col]
-                    # If result is timedelta, convert to seconds for compatibility
-                    if hasattr(result, 'dt') and hasattr(result.dt, 'total_seconds'):
-                        result = result.dt.total_seconds()
-                    df[name] = result
-                elif op == "+":
-                    df[name] = df[left_col] + df[right_col]
-                elif op == "*":
-                    df[name] = df[left_col] * df[right_col]
-                elif op == "/":
-                    df[name] = df[left_col] / df[right_col]
-                elif op == "//":
-                    df[name] = df[left_col] // df[right_col]
-                elif op == "%":
-                    df[name] = df[left_col] % df[right_col]
-                elif op == "**":
-                    df[name] = df[left_col] ** df[right_col]
-                else:
-                    raise ValueError(f"Unsupported binary operation: {op}")
+            # Apply the operation
+            if op == "-":
+                result = left_val - right_val
+                # If result is timedelta, convert to seconds for compatibility
+                if hasattr(result, 'dt') and hasattr(result.dt, 'total_seconds'):
+                    result = result.dt.total_seconds()
+                df[name] = result
+            elif op == "+":
+                result = left_val + right_val
+                # If result is timedelta, convert to seconds for compatibility
+                if hasattr(result, 'dt') and hasattr(result.dt, 'total_seconds'):
+                    result = result.dt.total_seconds()
+                df[name] = result
+            elif op == "*":
+                result = left_val * right_val
+                df[name] = result
+            elif op == "/":
+                result = left_val / right_val
+                df[name] = result
+            elif op == "//":
+                result = left_val // right_val
+                df[name] = result
+            elif op == "%":
+                result = left_val % right_val
+                df[name] = result
+            elif op == "**":
+                result = left_val ** right_val
+                df[name] = result
             else:
                 missing_cols = []
-                if left_col not in df.columns:
-                    missing_cols.append(left_col)
-                if right_col not in df.columns:
-                    missing_cols.append(right_col)
+                if hasattr(expression, 'left') and not hasattr(expression.left, 'name'):
+                    missing_cols.append('left_expression')
+                elif hasattr(expression, 'left') and expression.left.name not in df.columns:
+                    missing_cols.append(expression.left.name)
+                if hasattr(expression, 'right') and not hasattr(expression.right, 'name'):
+                    missing_cols.append('right_expression')
+                elif hasattr(expression, 'right') and expression.right.name not in df.columns:
+                    missing_cols.append(expression.right.name)
                 raise ValueError(f"Columns not found: {missing_cols}")
-        
+                    
         elif isinstance(expression, dict) and expression.get("op"):
             op = expression.get("op")
             col_name = expression.get("col")
@@ -594,19 +581,23 @@ class VectrillDataFrame:
                     # Now sum the result
                     if temp_col in temp_df.columns:
                         df[name] = temp_df[temp_col]
+                    else:
+                        df[name] = 0
                 else:
                     df[name] = 0
-            elif expr_name.startswith("pow(") and expr_name.endswith(")"):
+            elif expression.name.startswith("pow(") and expression.name.endswith(")"):
                 # Parse pow(column, exponent)
-                inner = expr_name[4:-1]
+                inner = expression.name[4:-1]
                 parts = inner.split(", ")
                 col_name = parts[0].strip()
                 try:
                     exponent = int(parts[1].strip())
                     if col_name in df.columns:
                         df[name] = df[col_name] ** exponent
+                    else:
+                        raise ValueError(f"Column '{col_name}' not found in DataFrame")
                 except ValueError:
-                    pass
+                    raise ValueError(f"Invalid exponent in pow function: {expression.name}")
             elif expr_name == "sqrt":
                 # Handle sqrt operations - check if it has nested expressions
                 if hasattr(expression, 'nested_expr') and expression.nested_expr is not None:
@@ -617,31 +608,29 @@ class VectrillDataFrame:
                         left_val = None
                         right_val = None
                         
-                        # Process left side
-                        if hasattr(nested.left, 'name') and nested.left.name.startswith("pow("):
-                            # Parse pow(a, 2)
-                            inner = nested.left.name[4:-1]
-                            parts = inner.split(", ")
-                            col_name = parts[0].strip()
-                            try:
-                                exponent = int(parts[1].strip())
-                                if col_name in df.columns:
-                                    left_val = df[col_name] ** exponent
-                            except ValueError:
-                                pass
+                        # Process left side - use recursive call to handle pow() properly
+                        left_temp_name = f"_temp_left_{name}"
+                        try:
+                            left_table = self._apply_rust_expression(nested.left, left_temp_name)
+                            left_df = left_table.to_pandas()
+                            if left_temp_name in left_df.columns:
+                                left_val = left_df[left_temp_name]
+                            else:
+                                left_val = None
+                        except Exception:
+                            left_val = None
                         
-                        # Process right side
-                        if hasattr(nested.right, 'name') and nested.right.name.startswith("pow("):
-                            # Parse pow(b, 2)
-                            inner = nested.right.name[4:-1]
-                            parts = inner.split(", ")
-                            col_name = parts[0].strip()
-                            try:
-                                exponent = int(parts[1].strip())
-                                if col_name in df.columns:
-                                    right_val = df[col_name] ** exponent
-                            except ValueError:
-                                pass
+                        # Process right side - use recursive call to handle pow() properly
+                        right_temp_name = f"_temp_right_{name}"
+                        try:
+                            right_table = self._apply_rust_expression(nested.right, right_temp_name)
+                            right_df = right_table.to_pandas()
+                            if right_temp_name in right_df.columns:
+                                right_val = right_df[right_temp_name]
+                            else:
+                                right_val = None
+                        except Exception:
+                            right_val = None
                         
                         # Apply operation and sqrt
                         if left_val is not None and right_val is not None:
@@ -649,6 +638,10 @@ class VectrillDataFrame:
                                 df[name] = np.sqrt(left_val + right_val)
                             elif nested.op == "*":
                                 df[name] = np.sqrt(left_val * right_val)
+                            elif nested.op == "-":
+                                df[name] = np.sqrt(left_val - right_val)
+                            elif nested.op == "/":
+                                df[name] = np.sqrt(left_val / right_val)
                             else:
                                 df[name] = 1.0  # Fallback
                         else:
@@ -814,6 +807,22 @@ class VectrillDataFrame:
                                 condition_result = df[col_name].isnull()
                             else:
                                 raise ValueError(f"Column '{col_name}' not found in DataFrame")
+                        elif condition.name.startswith("is_in(") and condition.name.endswith(")"):
+                            # Extract column name and values from is_in(column, [values])
+                            inner = condition.name[6:-1]
+                            parts = inner.split(", ")
+                            col_name = parts[0].strip()
+                            values_part = ", ".join(parts[1:]).strip()
+                            # Parse the values list
+                            try:
+                                import ast
+                                values = ast.literal_eval(values_part)
+                                if col_name in df.columns:
+                                    condition_result = df[col_name].isin(values)
+                                else:
+                                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
+                            except (ValueError, SyntaxError):
+                                condition_result = pd.Series([False] * len(df))
                         else:
                             raise ValueError(f"Unsupported ColumnExpression condition: {condition.name}")
                     elif isinstance(condition, (BinaryExpression, ArithmeticExpression)):
@@ -874,6 +883,7 @@ class VectrillDataFrame:
             
             # Extract base expression
             base_expr = expression.expr
+            window_func = None  # Initialize window_func to avoid UnboundLocalError
             if hasattr(base_expr, 'name'):
                 expr_name = base_expr.name
                 
@@ -929,11 +939,39 @@ class VectrillDataFrame:
                     col_name = expr_name[5:-1]
                     window_func = 'ceil'
                 elif expr_name.startswith("rolling_mean("):
-                    col_name = expr_name[13:-1]
-                    window_func = 'rolling_mean'
+                    # Parse rolling_mean(column, window_size)
+                    inner = expr_name[13:-1]
+                    parts = inner.split(", ")
+                    col_name = parts[0].strip()
+                    window_spec = parts[1].strip() if len(parts) > 1 else "5"
+                    
+                    # Handle time-based windows like '1m' vs integer windows
+                    if window_spec.startswith("'") and window_spec.endswith("'"):
+                        # Time-based window like '1m'
+                        time_window = window_spec.strip("'\"")
+                        if col_name in df.columns:
+                            # For time-based windows, use a reasonable window size
+                            # 1 minute window roughly corresponds to about 600 entries (assuming 1 per second)
+                            df[name] = df[col_name].rolling(window=600, min_periods=1).mean()
+                    else:
+                        # Integer window
+                        try:
+                            window_size = int(window_spec)
+                        except ValueError:
+                            window_size = 5
+                        if col_name in df.columns:
+                            df[name] = df[col_name].rolling(window=window_size, min_periods=1).mean()
                 elif expr_name.startswith("rolling_std("):
-                    col_name = expr_name[13:-1]
-                    window_func = 'rolling_std'
+                    # Parse rolling_std(column, window_size)
+                    inner = expr_name[12:-1]
+                    parts = inner.split(", ")
+                    col_name = parts[0].strip()
+                    try:
+                        window_size = int(parts[1].strip())
+                    except (ValueError, IndexError):
+                        window_size = 5
+                    if col_name in df.columns:
+                        df[name] = df[col_name].rolling(window=window_size, min_periods=1).std()
                 elif expr_name == "count()":
                     col_name = None
                     window_func = 'count'
@@ -1443,9 +1481,9 @@ class Functions:
             return ColumnExpression(f"pow({column}, {exponent})")
     
     @staticmethod
-    def when(condition) -> 'WhenExpression':
+    def when(condition, then_value=None) -> 'WhenExpression':
         """When-then conditional expression"""
-        return WhenExpression(condition, None)
+        return WhenExpression(condition, then_value)
     
     @staticmethod
     def coalesce(column, default: Any) -> ColumnExpression:

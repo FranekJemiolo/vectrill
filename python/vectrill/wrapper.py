@@ -6,6 +6,8 @@ import pyarrow as pa
 
 try:
     from ._rust import ffi, lib
+    from . import functions
+    from . import window
     
     class Sequencer:
         """Python wrapper for the Rust Sequencer implementation."""
