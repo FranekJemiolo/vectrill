@@ -962,7 +962,7 @@ class VectrillDataFrame:
                             # Restore original order by sorting back to original index
                             df_sorted = df_sorted.sort_index()
                             # Make sure the index matches the original dataframe
-                            df[name] = df_sorted[name].reindex(df.index)
+                            df[name] = df_sorted[name].values
                         elif window_func == 'lead':
                             # Sort by partition and order columns for window function
                             existing_order_cols = [col for col in order_cols if col in df.columns]
@@ -997,7 +997,7 @@ class VectrillDataFrame:
                                 df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].cumsum()
                                 # Restore original order by sorting back to original index
                                 df_sorted = df_sorted.sort_index()
-                                df[name] = df_sorted[name]
+                                df[name] = df_sorted[name].values
                             else:
                                 # Simple cumsum without order by
                                 df[name] = df.groupby(partition_cols)[col_name].cumsum()
