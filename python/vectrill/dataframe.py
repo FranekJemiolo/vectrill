@@ -700,112 +700,133 @@ class VectrillDataFrame:
                     
                     # Apply window function based on specification
                     if partition_cols and order_cols:
-                        # Add temporary row index to preserve original order
-                        df['_temp_row_idx'] = range(len(df))
-                        
-                        # Sort by partition and order columns
-                        existing_order_cols = [col for col in order_cols if col in df.columns]
-                        if existing_order_cols:
-                            sort_cols = partition_cols + existing_order_cols
+                        # For lag function, we need to handle ordering properly
+                        if window_func == 'lag':
+                            # Create a copy of the original DataFrame with its original index
+                            df_original = df.copy()
+                            
+                            # Sort by partition and order columns for window function
+                            existing_order_cols = [col for col in order_cols if col in df.columns]
+                            if existing_order_cols:
+                                sort_cols = partition_cols + existing_order_cols
+                            else:
+                                sort_cols = partition_cols
+                            
+                            # Apply window function on sorted data
                             df_sorted = df.sort_values(sort_cols)
-                        else:
-                            df_sorted = df.sort_values(partition_cols)
-                        
-                        # Apply window function on sorted data
-                        if window_func == 'cumsum':
-                            df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].cumsum()
-                        elif window_func == 'cummean':
-                            # For mean without order by, use transform to get same value for all rows (like pandas)
-                            if not existing_order_cols:
-                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].transform('mean')
-                            else:
-                                result = df_sorted.groupby(partition_cols)[col_name].expanding().mean()
-                                # Reset index to align with original DataFrame
-                                df_sorted[name] = result.reset_index(level=0, drop=True)
-                        elif window_func == 'cummin':
-                            # For min without order by, use transform to get same value for all rows (like pandas)
-                            if not existing_order_cols:
-                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].transform('min')
-                            else:
-                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].cummin()
-                        elif window_func == 'cummax':
-                            # For max without order by, use transform to get same value for all rows (like pandas)
-                            if not existing_order_cols:
-                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].transform('max')
-                            else:
-                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].cummax()
-                        elif window_func == 'cumstd':
-                            # For std without order by, use transform to get same value for all rows (like pandas)
-                            if not existing_order_cols:
-                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].transform('std')
-                            else:
-                                result = df_sorted.groupby(partition_cols)[col_name].expanding().std()
-                                # Reset index to align with original DataFrame
-                                df_sorted[name] = result.reset_index(level=0, drop=True)
-                        elif window_func == 'cummedian':
-                            # For median without order by, use transform to get same value for all rows (like pandas)
-                            if not existing_order_cols:
-                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].transform('median')
-                            else:
-                                result = df_sorted.groupby(partition_cols)[col_name].expanding().median()
-                                # Reset index to align with original DataFrame
-                                df_sorted[name] = result.reset_index(level=0, drop=True)
-                        elif window_func == 'lag':
                             df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].shift(1)
-                        elif window_func == 'rolling_mean':
-                            df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).mean()
-                        elif window_func == 'rolling_std':
-                            df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).std()
-                        elif window_func == 'count':
-                            df_sorted[name] = df_sorted.groupby(partition_cols).cumcount() + 1
-                        elif window_func == 'sum_when':
-                            # Handle sum_when window function
-                            if hasattr(expression, 'when_expr') and expression.when_expr:
-                                # First evaluate the when expression
-                                temp_col = f"_temp_when_{name}"
-                                temp_df = df_sorted.copy()
-                                
-                                # Apply when expression logic
-                                when_expr = expression.when_expr
-                                else_val = when_expr.otherwise_value if when_expr.otherwise_value is not None else 0
-                                temp_df[name] = else_val
-                                
-                                # Process conditions
-                                for i, (condition, then_val) in enumerate(zip(when_expr.conditions, when_expr.then_values)):
-                                    if isinstance(condition, dict):
-                                        op = condition.get("op")
-                                        col_name = condition.get("col")
-                                        value = condition.get("value")
-                                        
-                                        if col_name in temp_df.columns and op:
-                                            condition_result = None
+                            
+                            # Restore original order by sorting back to original index
+                            df_result = df_sorted.sort_index()
+                            df[name] = df_result[name].values
+                        else:
+                            # For other window functions, use direct pandas approach
+                            if window_func == 'cumsum':
+                                df[name] = df.groupby(partition_cols)[col_name].cumsum()
+                            elif window_func == 'cummean':
+                                # For mean without order by, use transform to get same value for all rows (like pandas)
+                                if not order_cols or not any(col in df.columns for col in order_cols):
+                                    df[name] = df.groupby(partition_cols)[col_name].transform('mean')
+                                else:
+                                    # For ordered mean, we need to sort first
+                                    existing_order_cols = [col for col in order_cols if col in df.columns]
+                                    sort_cols = partition_cols + existing_order_cols
+                                    df_sorted = df.sort_values(sort_cols)
+                                    result = df_sorted.groupby(partition_cols)[col_name].expanding().mean()
+                                    df_sorted[name] = result.reset_index(level=0, drop=True)
+                                    # Map back to original order
+                                    df[name] = df_sorted[name]
+                            elif window_func == 'cummin':
+                                # For min without order by, use transform to get same value for all rows (like pandas)
+                                if not order_cols or not any(col in df.columns for col in order_cols):
+                                    df[name] = df.groupby(partition_cols)[col_name].transform('min')
+                                else:
+                                    existing_order_cols = [col for col in order_cols if col in df.columns]
+                                    sort_cols = partition_cols + existing_order_cols
+                                    df_sorted = df.sort_values(sort_cols)
+                                    df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].cummin()
+                                    df[name] = df_sorted[name]
+                            elif window_func == 'cummax':
+                                # For max without order by, use transform to get same value for all rows (like pandas)
+                                if not order_cols or not any(col in df.columns for col in order_cols):
+                                    df[name] = df.groupby(partition_cols)[col_name].transform('max')
+                                else:
+                                    existing_order_cols = [col for col in order_cols if col in df.columns]
+                                    sort_cols = partition_cols + existing_order_cols
+                                    df_sorted = df.sort_values(sort_cols)
+                                    df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].cummax()
+                                    df[name] = df_sorted[name]
+                            elif window_func == 'cumstd':
+                                # For std without order by, use transform to get same value for all rows (like pandas)
+                                if not order_cols or not any(col in df.columns for col in order_cols):
+                                    df[name] = df.groupby(partition_cols)[col_name].transform('std')
+                                else:
+                                    existing_order_cols = [col for col in order_cols if col in df.columns]
+                                    sort_cols = partition_cols + existing_order_cols
+                                    df_sorted = df.sort_values(sort_cols)
+                                    result = df_sorted.groupby(partition_cols)[col_name].expanding().std()
+                                    df_sorted[name] = result.reset_index(level=0, drop=True)
+                                    df[name] = df_sorted[name]
+                            elif window_func == 'cummedian':
+                                # For median without order by, use transform to get same value for all rows (like pandas)
+                                if not order_cols or not any(col in df.columns for col in order_cols):
+                                    df[name] = df.groupby(partition_cols)[col_name].transform('median')
+                                else:
+                                    existing_order_cols = [col for col in order_cols if col in df.columns]
+                                    sort_cols = partition_cols + existing_order_cols
+                                    df_sorted = df.sort_values(sort_cols)
+                                    result = df_sorted.groupby(partition_cols)[col_name].expanding().median()
+                                    df_sorted[name] = result.reset_index(level=0, drop=True)
+                                    df[name] = df_sorted[name]
+                            elif window_func == 'rolling_mean':
+                                df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).mean()
+                            elif window_func == 'rolling_std':
+                                df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).std()
+                            elif window_func == 'count':
+                                df[name] = df.groupby(partition_cols).cumcount() + 1
+                            elif window_func == 'sum_when':
+                                # Handle sum_when window function
+                                if hasattr(expression, 'when_expr') and expression.when_expr:
+                                    # First evaluate the when expression
+                                    temp_col = f"_temp_when_{name}"
+                                    temp_df = df.copy()
+                                    
+                                    # Apply when expression logic
+                                    when_expr = expression.when_expr
+                                    else_val = when_expr.otherwise_value if when_expr.otherwise_value is not None else 0
+                                    temp_df[name] = else_val
+                                    
+                                    # Process conditions
+                                    for i, (condition, then_val) in enumerate(zip(when_expr.conditions, when_expr.then_values)):
+                                        if isinstance(condition, dict):
+                                            op = condition.get("op")
+                                            col_name = condition.get("col")
+                                            value = condition.get("value")
                                             
-                                            # Create condition based on operator
-                                            if op == "==":
-                                                condition_result = temp_df[col_name] == value
-                                            elif op == "!=":
-                                                condition_result = temp_df[col_name] != value
-                                            elif op == "<":
-                                                condition_result = temp_df[col_name] < value
-                                            elif op == ">":
-                                                condition_result = temp_df[col_name] > value
-                                            else:
-                                                condition_result = pd.Series([True] * len(temp_df))
-                                            
-                                            if condition_result is not None:
-                                                # Apply condition
-                                                mask = condition_result & (temp_df[name] == else_val)
-                                                temp_df.loc[mask, name] = then_val
-                                
-                                # Now apply window sum
-                                df_sorted[name] = df_sorted.groupby(partition_cols)[temp_df[name]].cumsum()
-                            else:
-                                df_sorted[name] = 0
-                        
-                        # Merge results back to original order
-                        df = df.drop(columns=[name]) if name in df.columns else df
-                        df = df.merge(df_sorted[['_temp_row_idx', name]], on='_temp_row_idx', how='left')
-                        df = df.drop(columns=['_temp_row_idx'])
+                                            if col_name in temp_df.columns and op:
+                                                condition_result = None
+                                                
+                                                # Create condition based on operator
+                                                if op == "==":
+                                                    condition_result = temp_df[col_name] == value
+                                                elif op == "!=":
+                                                    condition_result = temp_df[col_name] != value
+                                                elif op == "<":
+                                                    condition_result = temp_df[col_name] < value
+                                                elif op == ">":
+                                                    condition_result = temp_df[col_name] > value
+                                                else:
+                                                    condition_result = pd.Series([True] * len(temp_df))
+                                                
+                                                if condition_result is not None:
+                                                    # Apply condition
+                                                    mask = condition_result & (temp_df[name] == else_val)
+                                                    temp_df.loc[mask, name] = then_val
+                                    
+                                    # Now apply window sum
+                                    df[name] = df.groupby(partition_cols)[temp_df[name]].cumsum()
+                                else:
+                                    df[name] = 0
                     elif partition_cols:
                         # Only partition by
                         if window_func == 'cumsum':
