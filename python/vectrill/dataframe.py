@@ -227,13 +227,13 @@ class VectrillDataFrame:
         
         return pa.Table.from_pandas(filtered_df)
     
-    def sort(self, columns: Union[str, list]) -> 'VectrillDataFrame':
+    def sort(self, columns: Union[str, list], ascending: Union[bool, list] = True) -> 'VectrillDataFrame':
         """Sort DataFrame by columns"""
         if isinstance(columns, str):
             columns = [columns]
         
         df = self._arrow_table.to_pandas()
-        sorted_df = df.sort_values(columns)
+        sorted_df = df.sort_values(columns, ascending=ascending)
         return VectrillDataFrame(pa.Table.from_pandas(sorted_df))
     
     def with_columns(self, expressions: list) -> 'VectrillDataFrame':

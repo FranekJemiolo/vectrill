@@ -182,7 +182,7 @@ class TestComprehensiveFunctions:
             
             # Test Vectrill
             vectrill_df = vectrill.from_pandas(sample_data)
-            vectrill_result = vectrill_df.sort(sort_cols).to_pandas()
+            vectrill_result = vectrill_df.sort(sort_cols, ascending=ascending).to_pandas()
             
             # Compare shapes
             assert vectrill_result.shape == pandas_result.shape, f"Sort {sort_cols} shape mismatch"
