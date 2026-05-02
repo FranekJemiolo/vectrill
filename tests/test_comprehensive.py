@@ -45,6 +45,7 @@ class TestComprehensiveFunctions:
     @pytest.fixture
     def time_series_data(self):
         """Time series data for window operations"""
+        np.random.seed(42)  # Make deterministic
         dates = pd.date_range('2023-01-01', periods=50, freq='D')
         return pd.DataFrame({
             'date': dates,
