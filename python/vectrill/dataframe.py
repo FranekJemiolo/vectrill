@@ -605,9 +605,9 @@ class VectrillDataFrame:
                     col_name = None
                     window_func = None
                 
-                if col_name is not None and col_name in df.columns:
-                    partition_cols = rust_spec.get('partition_by', [])
-                    order_cols = rust_spec.get('order_by', [])
+                if (col_name is not None and col_name in df.columns) or window_func is not None:
+                    partition_cols = getattr(rust_spec, '_partition_columns', [])
+                    order_cols = getattr(rust_spec, '_order_columns', [])
                     
                     # Apply window function based on specification
                     if partition_cols and order_cols:
