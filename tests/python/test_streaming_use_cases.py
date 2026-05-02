@@ -113,7 +113,7 @@ class TestUserSessionAnalytics:
         # Polars implementation
         polars_df = pl.DataFrame(session_data)
         polars_result = polars_df.sort(['session_id', 'timestamp']).with_columns([
-            pl.col('revenue').cumsum().over('session_id').alias('cumulative_revenue')
+            (pl.col('revenue').shift(1).fill_null(0) + pl.col('revenue')).alias('cumulative_revenue')
         ])
         
         # Vectrill implementation
