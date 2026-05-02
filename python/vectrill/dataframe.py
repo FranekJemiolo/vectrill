@@ -234,8 +234,7 @@ class VectrillDataFrame:
         
         df = self._arrow_table.to_pandas()
         sorted_df = df.sort_values(columns, ascending=ascending)
-        # Reset index to preserve original order for window functions
-        sorted_df = sorted_df.reset_index(drop=True)
+        # Preserve original index for window functions
         return VectrillDataFrame(pa.Table.from_pandas(sorted_df))
     
     def with_columns(self, expressions: list) -> 'VectrillDataFrame':
@@ -956,9 +955,9 @@ class VectrillDataFrame:
                             else:
                                 sort_cols = partition_cols
                             
-                            # If the dataframe is already sorted (has reset index), apply window function directly
+                            # Check if dataframe is already sorted by the required columns
                             if df.index.equals(pd.RangeIndex(len(df))):
-                                # Dataframe is already sorted, apply window function directly
+                                # Dataframe is already sorted (has reset index), apply window function directly
                                 df[name] = df.groupby(partition_cols)[col_name].shift(1)
                             else:
                                 # Dataframe has original index, need to sort and restore
