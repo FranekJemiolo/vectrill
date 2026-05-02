@@ -112,6 +112,10 @@ class ColumnExpression:
     def cumsum(self) -> 'ColumnExpression':
         """Cumulative sum function"""
         return ColumnExpression(f"cumsum({self.name})")
+    
+    def is_null(self) -> 'ColumnExpression':
+        """Check if column values are null"""
+        return ColumnExpression(f"is_null({self.name})")
 
 
 class BinaryExpression:
@@ -262,7 +266,49 @@ class VectrillDataFrame:
         # For now, we implement basic logic in Python using Arrow compute
         df = self._arrow_table.to_pandas()
         
-        if isinstance(expression, dict) and expression.get("op"):
+        # Handle ColumnExpression - just copy the column data
+        if isinstance(expression, ColumnExpression):
+            if expression.name in df.columns:
+                df[name] = df[expression.name]
+            else:
+                raise ValueError(f"Column '{expression.name}' not found in DataFrame")
+        
+        # Handle BinaryExpression - operations between two columns
+        elif isinstance(expression, BinaryExpression):
+            left_col = expression.left.name
+            right_col = expression.right.name
+            op = expression.op
+            
+            if left_col in df.columns and right_col in df.columns:
+                if op == "-":
+                    result = df[left_col] - df[right_col]
+                    # If result is timedelta, convert to seconds for compatibility
+                    if hasattr(result, 'dt') and hasattr(result.dt, 'total_seconds'):
+                        result = result.dt.total_seconds()
+                    df[name] = result
+                elif op == "+":
+                    df[name] = df[left_col] + df[right_col]
+                elif op == "*":
+                    df[name] = df[left_col] * df[right_col]
+                elif op == "/":
+                    df[name] = df[left_col] / df[right_col]
+                elif op == "//":
+                    df[name] = df[left_col] // df[right_col]
+                elif op == "%":
+                    df[name] = df[left_col] % df[right_col]
+                elif op == "**":
+                    df[name] = df[left_col] ** df[right_col]
+                else:
+                    raise ValueError(f"Unsupported binary operation: {op}")
+            else:
+                missing_cols = []
+                if left_col not in df.columns:
+                    missing_cols.append(left_col)
+                if right_col not in df.columns:
+                    missing_cols.append(right_col)
+                raise ValueError(f"Columns not found: {missing_cols}")
+        
+        elif isinstance(expression, dict) and expression.get("op"):
             op = expression.get("op")
             col_name = expression.get("col")
             value = expression.get("value")
@@ -505,37 +551,77 @@ class VectrillDataFrame:
         elif isinstance(expression, WhenExpression):
             # When-then-otherwise expression with multiple conditions
             if len(df) > 0:
-                else_val = expression.otherwise_value if expression.otherwise_value is not None else 'unknown'
+                # Evaluate else_val if it's a ColumnExpression
+                else_val = expression.otherwise_value
+                if isinstance(else_val, ColumnExpression):
+                    if else_val.name in df.columns:
+                        else_val = df[else_val.name]
+                    else:
+                        raise ValueError(f"Column '{else_val.name}' not found in DataFrame")
+                elif else_val is None:
+                    else_val = 'unknown'
                 
                 # Start with default value
                 df[name] = else_val
                 
                 # Process conditions in reverse order (last condition takes precedence)
                 for i, (condition, then_val) in enumerate(zip(expression.conditions, expression.then_values)):
+                    # Evaluate then_val if it's a ColumnExpression
+                    if isinstance(then_val, ColumnExpression):
+                        if then_val.name in df.columns:
+                            evaluated_then_val = df[then_val.name]
+                        else:
+                            raise ValueError(f"Column '{then_val.name}' not found in DataFrame")
+                    else:
+                        evaluated_then_val = then_val
+                    
+                    # Handle both dict conditions and ColumnExpression conditions
+                    condition_result = None
+                    
                     if isinstance(condition, dict):
                         op = condition.get("op")
                         col_name = condition.get("col")
                         value = condition.get("value")
                         
                         if col_name in df.columns and op:
-                            condition_result = None
-                            
                             # Create condition based on operator
-                            if op == "<":
-                                condition_result = df[col_name] < value
-                            elif op == ">":
-                                condition_result = df[col_name] > value
-                            elif op == "==":
-                                condition_result = df[col_name] == value
-                            elif op == "!=":
-                                condition_result = df[col_name] != value
+                            if op == "is_null":
+                                condition_result = df[col_name].isnull()
                             else:
-                                condition_result = pd.Series([True] * len(df))
-                            
-                            if condition_result is not None:
-                                # Apply condition - only update where condition is True and current value is default
-                                mask = condition_result & (df[name] == else_val)
-                                df.loc[mask, name] = then_val
+                                # Handle timedelta comparisons by converting to seconds
+                                col_data = df[col_name]
+                                if hasattr(col_data, 'dt') and hasattr(col_data.dt, 'total_seconds'):
+                                    # This is a timedelta column, convert to seconds for comparison
+                                    col_data = col_data.dt.total_seconds()
+                                
+                                if op == "<":
+                                    condition_result = col_data < value
+                                elif op == ">":
+                                    condition_result = col_data > value
+                                elif op == "==":
+                                    condition_result = col_data == value
+                                elif op == "!=":
+                                    condition_result = col_data != value
+                                else:
+                                    condition_result = pd.Series([True] * len(df))
+                    
+                    elif isinstance(condition, ColumnExpression):
+                        # Handle ColumnExpression conditions like is_null()
+                        if condition.name.startswith("is_null(") and condition.name.endswith(")"):
+                            # Extract column name from is_null(column_name)
+                            col_name = condition.name[8:-1]  # Remove "is_null(" and ")"
+                            if col_name in df.columns:
+                                condition_result = df[col_name].isnull()
+                            else:
+                                raise ValueError(f"Column '{col_name}' not found in DataFrame")
+                        else:
+                            raise ValueError(f"Unsupported ColumnExpression condition: {condition.name}")
+                    else:
+                        raise ValueError(f"Unsupported condition type: {type(condition)}")
+                    
+                    if condition_result is not None:
+                        # Apply condition - update all rows where condition is True
+                        df.loc[condition_result, name] = evaluated_then_val
         
         return pa.Table.from_pandas(df)
     
@@ -587,7 +673,10 @@ class VectrillDataFrame:
                     col_name = expr_name[7:-1]
                     window_func = 'cummedian'
                 elif expr_name.startswith("lag("):
-                    col_name = expr_name[4:-1]
+                    # Parse lag(column, offset) properly
+                    inner = expr_name[4:-1]
+                    parts = inner.split(", ")
+                    col_name = parts[0].strip()
                     window_func = 'lag'
                 elif expr_name.startswith("rolling_mean("):
                     col_name = expr_name[13:-1]
@@ -611,67 +700,70 @@ class VectrillDataFrame:
                     
                     # Apply window function based on specification
                     if partition_cols and order_cols:
+                        # Add temporary row index to preserve original order
+                        df['_temp_row_idx'] = range(len(df))
+                        
                         # Sort by partition and order columns
                         existing_order_cols = [col for col in order_cols if col in df.columns]
                         if existing_order_cols:
                             sort_cols = partition_cols + existing_order_cols
-                            df = df.sort_values(sort_cols)
+                            df_sorted = df.sort_values(sort_cols)
                         else:
-                            df = df.sort_values(partition_cols)
+                            df_sorted = df.sort_values(partition_cols)
                         
-                        # Apply window function
+                        # Apply window function on sorted data
                         if window_func == 'cumsum':
-                            df[name] = df.groupby(partition_cols)[col_name].cumsum()
+                            df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].cumsum()
                         elif window_func == 'cummean':
                             # For mean without order by, use transform to get same value for all rows (like pandas)
                             if not existing_order_cols:
-                                df[name] = df.groupby(partition_cols)[col_name].transform('mean')
+                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].transform('mean')
                             else:
-                                result = df.groupby(partition_cols)[col_name].expanding().mean()
+                                result = df_sorted.groupby(partition_cols)[col_name].expanding().mean()
                                 # Reset index to align with original DataFrame
-                                df[name] = result.reset_index(level=0, drop=True)
+                                df_sorted[name] = result.reset_index(level=0, drop=True)
                         elif window_func == 'cummin':
-                            # For min without order by, use transform to get same value for all rows
+                            # For min without order by, use transform to get same value for all rows (like pandas)
                             if not existing_order_cols:
-                                df[name] = df.groupby(partition_cols)[col_name].transform('min')
+                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].transform('min')
                             else:
-                                df[name] = df.groupby(partition_cols)[col_name].cummin()
+                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].cummin()
                         elif window_func == 'cummax':
-                            # For max without order by, use transform to get same value for all rows
+                            # For max without order by, use transform to get same value for all rows (like pandas)
                             if not existing_order_cols:
-                                df[name] = df.groupby(partition_cols)[col_name].transform('max')
+                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].transform('max')
                             else:
-                                df[name] = df.groupby(partition_cols)[col_name].cummax()
+                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].cummax()
                         elif window_func == 'cumstd':
                             # For std without order by, use transform to get same value for all rows (like pandas)
                             if not existing_order_cols:
-                                df[name] = df.groupby(partition_cols)[col_name].transform('std')
+                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].transform('std')
                             else:
-                                result = df.groupby(partition_cols)[col_name].expanding().std()
+                                result = df_sorted.groupby(partition_cols)[col_name].expanding().std()
                                 # Reset index to align with original DataFrame
-                                df[name] = result.reset_index(level=0, drop=True)
+                                df_sorted[name] = result.reset_index(level=0, drop=True)
                         elif window_func == 'cummedian':
                             # For median without order by, use transform to get same value for all rows (like pandas)
                             if not existing_order_cols:
-                                df[name] = df.groupby(partition_cols)[col_name].transform('median')
+                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].transform('median')
                             else:
-                                result = df.groupby(partition_cols)[col_name].expanding().median()
+                                result = df_sorted.groupby(partition_cols)[col_name].expanding().median()
                                 # Reset index to align with original DataFrame
-                                df[name] = result.reset_index(level=0, drop=True)
+                                df_sorted[name] = result.reset_index(level=0, drop=True)
                         elif window_func == 'lag':
-                            df[name] = df.groupby(partition_cols)[col_name].shift(1)
+                            df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].shift(1)
                         elif window_func == 'rolling_mean':
-                            df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).mean()
+                            df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).mean()
                         elif window_func == 'rolling_std':
-                            df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).std()
+                            df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).std()
                         elif window_func == 'count':
-                            df[name] = df.groupby(partition_cols).cumcount() + 1
+                            df_sorted[name] = df_sorted.groupby(partition_cols).cumcount() + 1
                         elif window_func == 'sum_when':
                             # Handle sum_when window function
                             if hasattr(expression, 'when_expr') and expression.when_expr:
                                 # First evaluate the when expression
                                 temp_col = f"_temp_when_{name}"
-                                temp_df = df.copy()
+                                temp_df = df_sorted.copy()
                                 
                                 # Apply when expression logic
                                 when_expr = expression.when_expr
@@ -706,11 +798,14 @@ class VectrillDataFrame:
                                                 temp_df.loc[mask, name] = then_val
                                 
                                 # Now apply window sum
-                                df[name] = df.groupby(partition_cols)[temp_df[name]].cumsum()
+                                df_sorted[name] = df_sorted.groupby(partition_cols)[temp_df[name]].cumsum()
                             else:
-                                df[name] = 0
+                                df_sorted[name] = 0
                         
-                        df = df.sort_index()
+                        # Merge results back to original order
+                        df = df.drop(columns=[name]) if name in df.columns else df
+                        df = df.merge(df_sorted[['_temp_row_idx', name]], on='_temp_row_idx', how='left')
+                        df = df.drop(columns=['_temp_row_idx'])
                     elif partition_cols:
                         # Only partition by
                         if window_func == 'cumsum':
