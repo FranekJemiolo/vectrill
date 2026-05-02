@@ -247,6 +247,10 @@ class VectrillDataFrame:
                 result = result.with_column(expr, expr.alias_name)
         return result
     
+    def groupby(self, columns: Union[str, list]) -> 'GroupBy':
+        """Group DataFrame by columns"""
+        return GroupBy(self._arrow_table, columns)
+    
     def with_column(self, expression, name: str) -> 'VectrillDataFrame':
         """Add a new column with the result of an expression using Rust backend"""
         if not RUST_AVAILABLE:
