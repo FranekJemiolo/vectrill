@@ -270,6 +270,47 @@ class VectrillDataFrame:
         if isinstance(expression, ColumnExpression):
             if expression.name in df.columns:
                 df[name] = df[expression.name]
+            elif expression.name == "abs":
+                # Handle abs function - need to get the column from the nested expression
+                if hasattr(expression, 'nested_expr') and expression.nested_expr:
+                    col_name = expression.nested_expr.name
+                    if col_name in df.columns:
+                        df[name] = df[col_name].abs()
+                    else:
+                        raise ValueError(f"Column '{col_name}' not found in DataFrame")
+                else:
+                    raise ValueError("abs function requires a column argument")
+            elif expression.name.startswith("var("):
+                # Handle var function
+                col_name = expression.name[4:-1]
+                if col_name in df.columns:
+                    df[name] = df[col_name].var()
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name.startswith("round("):
+                # Handle round function
+                inner = expression.name[6:-1]
+                parts = inner.split(", ")
+                col_name = parts[0].strip()
+                decimals = int(parts[1]) if len(parts) > 1 else 0
+                if col_name in df.columns:
+                    df[name] = df[col_name].round(decimals)
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name.startswith("floor("):
+                # Handle floor function
+                col_name = expression.name[6:-1]
+                if col_name in df.columns:
+                    df[name] = np.floor(df[col_name])
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name.startswith("ceil("):
+                # Handle ceil function
+                col_name = expression.name[5:-1]
+                if col_name in df.columns:
+                    df[name] = np.ceil(df[col_name])
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
             else:
                 raise ValueError(f"Column '{expression.name}' not found in DataFrame")
         
@@ -678,6 +719,29 @@ class VectrillDataFrame:
                     parts = inner.split(", ")
                     col_name = parts[0].strip()
                     window_func = 'lag'
+                elif expr_name.startswith("lead("):
+                    # Parse lead(column, offset) properly
+                    inner = expr_name[5:-1]
+                    parts = inner.split(", ")
+                    col_name = parts[0].strip()
+                    window_func = 'lead'
+                elif expr_name.startswith("var("):
+                    col_name = expr_name[4:-1]
+                    window_func = 'var'
+                elif expr_name.startswith("abs("):
+                    col_name = expr_name[4:-1]
+                    window_func = 'abs'
+                elif expr_name.startswith("round("):
+                    inner = expr_name[6:-1]
+                    parts = inner.split(", ")
+                    col_name = parts[0].strip()
+                    window_func = 'round'
+                elif expr_name.startswith("floor("):
+                    col_name = expr_name[6:-1]
+                    window_func = 'floor'
+                elif expr_name.startswith("ceil("):
+                    col_name = expr_name[5:-1]
+                    window_func = 'ceil'
                 elif expr_name.startswith("rolling_mean("):
                     col_name = expr_name[13:-1]
                     window_func = 'rolling_mean'
@@ -702,9 +766,6 @@ class VectrillDataFrame:
                     if partition_cols and order_cols:
                         # For lag function, we need to handle ordering properly
                         if window_func == 'lag':
-                            # Create a copy of the original DataFrame with its original index
-                            df_original = df.copy()
-                            
                             # Sort by partition and order columns for window function
                             existing_order_cols = [col for col in order_cols if col in df.columns]
                             if existing_order_cols:
@@ -719,6 +780,31 @@ class VectrillDataFrame:
                             # Restore original order by sorting back to original index
                             df_result = df_sorted.sort_index()
                             df[name] = df_result[name].values
+                        elif window_func == 'lead':
+                            # Sort by partition and order columns for window function
+                            existing_order_cols = [col for col in order_cols if col in df.columns]
+                            if existing_order_cols:
+                                sort_cols = partition_cols + existing_order_cols
+                            else:
+                                sort_cols = partition_cols
+                            
+                            # Apply window function on sorted data
+                            df_sorted = df.sort_values(sort_cols)
+                            df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].shift(-1)
+                            
+                            # Restore original order by sorting back to original index
+                            df_result = df_sorted.sort_index()
+                            df[name] = df_result[name].values
+                        elif window_func == 'var':
+                            df[name] = df.groupby(partition_cols)[col_name].transform('var')
+                        elif window_func == 'abs':
+                            df[name] = df[col_name].abs()
+                        elif window_func == 'round':
+                            df[name] = df[col_name].round(0)  # Default to 0 decimals
+                        elif window_func == 'floor':
+                            df[name] = np.floor(df[col_name])
+                        elif window_func == 'ceil':
+                            df[name] = np.ceil(df[col_name])
                         else:
                             # For other window functions, use direct pandas approach
                             if window_func == 'cumsum':
@@ -1154,6 +1240,53 @@ class Functions:
             return ColumnExpression(f"coalesce({column.name}, {default})")
         else:
             return ColumnExpression(f"coalesce({column}, {default})")
+    
+    @staticmethod
+    def var(column) -> ColumnExpression:
+        """Variance function"""
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"var({column.name})")
+        else:
+            return ColumnExpression(f"var({column})")
+    
+    @staticmethod
+    def lead(column, offset: int = 1) -> ColumnExpression:
+        """Lead function - opposite of lag"""
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"lead({column.name}, {offset})")
+        else:
+            return ColumnExpression(f"lead({column}, {offset})")
+    
+    @staticmethod
+    def abs(column) -> ColumnExpression:
+        """Absolute value function"""
+        result = ColumnExpression("abs")
+        result.nested_expr = column
+        return result
+    
+    @staticmethod
+    def round(column, decimals: int = 0) -> ColumnExpression:
+        """Round function"""
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"round({column.name}, {decimals})")
+        else:
+            return ColumnExpression(f"round({column}, {decimals})")
+    
+    @staticmethod
+    def floor(column) -> ColumnExpression:
+        """Floor function"""
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"floor({column.name})")
+        else:
+            return ColumnExpression(f"floor({column})")
+    
+    @staticmethod
+    def ceil(column) -> ColumnExpression:
+        """Ceiling function"""
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"ceil({column.name})")
+        else:
+            return ColumnExpression(f"ceil({column})")
     
     @staticmethod
     def std(column) -> ColumnExpression:
