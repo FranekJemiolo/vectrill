@@ -1063,9 +1063,15 @@ class VectrillDataFrame:
                                     df_sorted[name] = result.reset_index(level=0, drop=True)
                                     df[name] = df_sorted[name]
                             elif window_func == 'rolling_mean':
-                                df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).mean()
+                                if partition_cols:
+                                    df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).mean().reset_index(level=0, drop=True)
+                                else:
+                                    df[name] = df[col_name].rolling(window=5, min_periods=1).mean()
                             elif window_func == 'rolling_std':
-                                df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).std()
+                                if partition_cols:
+                                    df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).std().reset_index(level=0, drop=True)
+                                else:
+                                    df[name] = df[col_name].rolling(window=5, min_periods=1).std()
                             elif window_func == 'count':
                                 df[name] = df.groupby(partition_cols).cumcount() + 1
                             elif window_func == 'sum_when':
