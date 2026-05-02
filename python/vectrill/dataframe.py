@@ -311,6 +311,72 @@ class VectrillDataFrame:
                     df[name] = np.ceil(df[col_name])
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name.startswith("length("):
+                # Handle length function
+                col_name = expression.name[7:-1]
+                if col_name in df.columns:
+                    df[name] = df[col_name].str.len()
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name.startswith("upper("):
+                # Handle upper function
+                col_name = expression.name[6:-1]
+                if col_name in df.columns:
+                    df[name] = df[col_name].str.upper()
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name.startswith("std("):
+                # Handle std function
+                col_name = expression.name[4:-1]
+                if col_name in df.columns:
+                    df[name] = df[col_name].std()
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name.startswith("mean("):
+                # Handle mean function
+                col_name = expression.name[5:-1]
+                if col_name in df.columns:
+                    df[name] = df[col_name].mean()
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name.startswith("sum("):
+                # Handle sum function
+                col_name = expression.name[4:-1]
+                if col_name in df.columns:
+                    df[name] = df[col_name].sum()
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name.startswith("min("):
+                # Handle min function
+                col_name = expression.name[4:-1]
+                if col_name in df.columns:
+                    df[name] = df[col_name].min()
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name.startswith("max("):
+                # Handle max function
+                col_name = expression.name[4:-1]
+                if col_name in df.columns:
+                    df[name] = df[col_name].max()
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name.startswith("median("):
+                # Handle median function
+                col_name = expression.name[7:-1]
+                if col_name in df.columns:
+                    df[name] = df[col_name].median()
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name.startswith("count("):
+                # Handle count function
+                col_name = expression.name[6:-1]
+                if col_name in df.columns:
+                    df[name] = df[col_name].count()
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name == "count()":
+                # Handle count function without column
+                df[name] = len(df)
             else:
                 raise ValueError(f"Column '{expression.name}' not found in DataFrame")
         
@@ -592,13 +658,36 @@ class VectrillDataFrame:
         elif isinstance(expression, WhenExpression):
             # When-then-otherwise expression with multiple conditions
             if len(df) > 0:
-                # Evaluate else_val if it's a ColumnExpression
+                # Evaluate else_val if it's a ColumnExpression or ArithmeticExpression
                 else_val = expression.otherwise_value
                 if isinstance(else_val, ColumnExpression):
                     if else_val.name in df.columns:
                         else_val = df[else_val.name]
                     else:
                         raise ValueError(f"Column '{else_val.name}' not found in DataFrame")
+                elif isinstance(else_val, (BinaryExpression, ArithmeticExpression)):
+                    # Evaluate arithmetic expression
+                    if hasattr(else_val, 'left') and hasattr(else_val, 'right') and hasattr(else_val, 'op'):
+                        left_col = else_val.left
+                        right_val = else_val.right
+                        op = else_val.op
+                        
+                        if hasattr(left_col, 'name') and left_col.name in df.columns:
+                            left_data = df[left_col.name]
+                            if op == "*":
+                                else_val = left_data * right_val
+                            elif op == "+":
+                                else_val = left_data + right_val
+                            elif op == "-":
+                                else_val = left_data - right_val
+                            elif op == "/":
+                                else_val = left_data / right_val
+                            else:
+                                else_val = else_val
+                        else:
+                            raise ValueError(f"Column '{left_col.name}' not found in DataFrame")
+                    else:
+                        else_val = else_val
                 elif else_val is None:
                     else_val = 'unknown'
                 
@@ -607,12 +696,35 @@ class VectrillDataFrame:
                 
                 # Process conditions in reverse order (last condition takes precedence)
                 for i, (condition, then_val) in enumerate(zip(expression.conditions, expression.then_values)):
-                    # Evaluate then_val if it's a ColumnExpression
+                    # Evaluate then_val if it's a ColumnExpression or ArithmeticExpression
                     if isinstance(then_val, ColumnExpression):
                         if then_val.name in df.columns:
                             evaluated_then_val = df[then_val.name]
                         else:
                             raise ValueError(f"Column '{then_val.name}' not found in DataFrame")
+                    elif isinstance(then_val, (BinaryExpression, ArithmeticExpression)):
+                        # Evaluate arithmetic expression
+                        if hasattr(then_val, 'left') and hasattr(then_val, 'right') and hasattr(then_val, 'op'):
+                            left_col = then_val.left
+                            right_val = then_val.right
+                            op = then_val.op
+                            
+                            if hasattr(left_col, 'name') and left_col.name in df.columns:
+                                left_data = df[left_col.name]
+                                if op == "*":
+                                    evaluated_then_val = left_data * right_val
+                                elif op == "+":
+                                    evaluated_then_val = left_data + right_val
+                                elif op == "-":
+                                    evaluated_then_val = left_data - right_val
+                                elif op == "/":
+                                    evaluated_then_val = left_data / right_val
+                                else:
+                                    evaluated_then_val = then_val
+                            else:
+                                raise ValueError(f"Column '{left_col.name}' not found in DataFrame")
+                        else:
+                            evaluated_then_val = then_val
                     else:
                         evaluated_then_val = then_val
                     
@@ -657,6 +769,30 @@ class VectrillDataFrame:
                                 raise ValueError(f"Column '{col_name}' not found in DataFrame")
                         else:
                             raise ValueError(f"Unsupported ColumnExpression condition: {condition.name}")
+                    elif isinstance(condition, (BinaryExpression, ArithmeticExpression)):
+                        # Handle BinaryExpression conditions like col('category') == 'A'
+                        left_col = condition.left
+                        right_val = condition.right
+                        op = condition.op
+                        
+                        if hasattr(left_col, 'name') and left_col.name in df.columns:
+                            # Create condition based on operator
+                            if op == "==":
+                                condition_result = df[left_col.name] == right_val
+                            elif op == "!=":
+                                condition_result = df[left_col.name] != right_val
+                            elif op == "<":
+                                condition_result = df[left_col.name] < right_val
+                            elif op == ">":
+                                condition_result = df[left_col.name] > right_val
+                            elif op == "<=":
+                                condition_result = df[left_col.name] <= right_val
+                            elif op == ">=":
+                                condition_result = df[left_col.name] >= right_val
+                            else:
+                                condition_result = pd.Series([True] * len(df))
+                        else:
+                            raise ValueError(f"Column '{left_col.name}' not found in DataFrame")
                     else:
                         raise ValueError(f"Unsupported condition type: {type(condition)}")
                     
@@ -805,11 +941,11 @@ class VectrillDataFrame:
                             df[name] = np.floor(df[col_name])
                         elif window_func == 'ceil':
                             df[name] = np.ceil(df[col_name])
+                        elif window_func == 'cumsum':
+                            df[name] = df.groupby(partition_cols)[col_name].cumsum()
                         else:
                             # For other window functions, use direct pandas approach
-                            if window_func == 'cumsum':
-                                df[name] = df.groupby(partition_cols)[col_name].cumsum()
-                            elif window_func == 'cummean':
+                            if window_func == 'cummean':
                                 # For mean without order by, use transform to get same value for all rows (like pandas)
                                 if not order_cols or not any(col in df.columns for col in order_cols):
                                     df[name] = df.groupby(partition_cols)[col_name].transform('mean')
@@ -1195,9 +1331,11 @@ class Functions:
             return ColumnExpression(f"max({column})")
     
     @staticmethod
-    def count(column) -> ColumnExpression:
+    def count(column=None) -> ColumnExpression:
         """Count function"""
-        if isinstance(column, ColumnExpression):
+        if column is None:
+            return ColumnExpression("count()")
+        elif isinstance(column, ColumnExpression):
             return ColumnExpression(f"count({column.name})")
         else:
             return ColumnExpression(f"count({column})")
@@ -1351,11 +1489,7 @@ class Functions:
         else:
             return ColumnExpression(f"rolling_std({column}, {window_size})")
     
-    @staticmethod
-    def count() -> ColumnExpression:
-        """Count function without column parameter"""
-        return ColumnExpression("count()")
-
+    
 
 class WhenExpression:
     """When-then expression for conditional logic"""
