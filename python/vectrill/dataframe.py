@@ -955,19 +955,14 @@ class VectrillDataFrame:
                             else:
                                 sort_cols = partition_cols
                             
-                            # Check if dataframe is already sorted by the required columns
-                            if df.index.equals(pd.RangeIndex(len(df))):
-                                # Dataframe is already sorted (has reset index), apply window function directly
-                                df[name] = df.groupby(partition_cols)[col_name].shift(1)
-                            else:
-                                # Dataframe has original index, need to sort and restore
-                                df_sorted = df.sort_values(sort_cols)
-                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].shift(1)
-                                
-                                # Restore original order by sorting back to original index
-                                df_sorted = df_sorted.sort_index()
-                                # Make sure the index matches the original dataframe
-                                df[name] = df_sorted[name].reindex(df.index)
+                            # Apply window function on sorted data
+                            df_sorted = df.sort_values(sort_cols)
+                            df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].shift(1)
+                            
+                            # Restore original order by sorting back to original index
+                            df_sorted = df_sorted.sort_index()
+                            # Make sure the index matches the original dataframe
+                            df[name] = df_sorted[name].reindex(df.index)
                         elif window_func == 'lead':
                             # Sort by partition and order columns for window function
                             existing_order_cols = [col for col in order_cols if col in df.columns]
