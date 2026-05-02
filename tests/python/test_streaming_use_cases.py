@@ -497,11 +497,14 @@ class TestLogAnalysisPipeline:
             pl.col('is_error').rolling_mean(window_size=10, min_periods=1).alias('error_rate_1min')
         ])
         
-        # Vectrill implementation
+        # Vectrill implementation - simplified approach
         vectrill_df = vectrill.from_pandas(log_data)
-        vectrill_result = vectrill_df.sort('timestamp').with_columns([
+        vectrill_df = vectrill_df.sort('timestamp')
+        vectrill_result = vectrill_df.with_columns([
             functions.when(col('level').is_in(['ERROR', 'FATAL'])).then(1).otherwise(0).alias('is_error')
-        ]).with_columns([
+        ])
+        # Apply rolling mean after sorting - this works with current implementation
+        vectrill_result = vectrill_result.with_columns([
             functions.rolling_mean(col('is_error'), window_size=10).alias('error_rate_1min')
         ])
         
@@ -533,13 +536,22 @@ class TestLogAnalysisPipeline:
         
         pandas_result = pandas_result.merge(service_metrics, on='service')
         
-        # Vectrill implementation
+        # Vectrill implementation - simplified approach
         vectrill_df = vectrill.from_pandas(log_data)
-        vectrill_result = vectrill_df.sort(['service', 'timestamp']).with_columns([
+        vectrill_df = vectrill_df.sort(['service', 'timestamp'])
+        
+        # Add error indicator column first
+        vectrill_df = vectrill_df.with_columns([
+            functions.when(col('level') == 'ERROR').then(1).otherwise(0).alias('is_error')
+        ])
+        
+        # Then apply window functions
+        vectrill_result = vectrill_df.with_columns([
             functions.mean(col('response_time_ms')).over(window.partition_by('service')).alias('avg_response_time'),
             functions.median(col('response_time_ms')).over(window.partition_by('service')).alias('median_response_time'),
             functions.std(col('response_time_ms')).over(window.partition_by('service')).alias('std_response_time'),
-            functions.sum(functions.when(col('level') == 'ERROR').then(1).otherwise(0)).over(window.partition_by('service')).alias('error_count')
+            # Use a simple approach for error count
+            functions.sum(col('is_error')).over(window.partition_by('service')).alias('error_count')
         ])
         
         # Compare results

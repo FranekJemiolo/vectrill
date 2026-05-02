@@ -350,6 +350,26 @@ class VectrillDataFrame:
                         df[name] = df[col_name] + value
                 else:
                     raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name.startswith("rolling_mean("):
+                # Handle rolling_mean function without window specification
+                inner = expression.name[13:-1]
+                parts = inner.split(", ")
+                col_name = parts[0].strip()
+                window_size = int(parts[1].strip()) if len(parts) > 1 else 5
+                if col_name in df.columns:
+                    df[name] = df[col_name].rolling(window=window_size, min_periods=1).mean()
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
+            elif expression.name.startswith("rolling_std("):
+                # Handle rolling_std function without window specification
+                inner = expression.name[12:-1]
+                parts = inner.split(", ")
+                col_name = parts[0].strip()
+                window_size = int(parts[1].strip()) if len(parts) > 1 else 5
+                if col_name in df.columns:
+                    df[name] = df[col_name].rolling(window=window_size, min_periods=1).std()
+                else:
+                    raise ValueError(f"Column '{col_name}' not found in DataFrame")
             else:
                 raise ValueError(f"Column '{expression.name}' not found in DataFrame")
         
@@ -912,10 +932,10 @@ class VectrillDataFrame:
                     window_func = 'cumsum'
                 elif expr_name.startswith("sum("):
                     col_name = expr_name[4:-1]
-                    window_func = 'cumsum'
+                    window_func = 'sum'
                 elif expr_name.startswith("mean("):
                     col_name = expr_name[5:-1]
-                    window_func = 'cummean'
+                    window_func = 'mean'
                 elif expr_name.startswith("min("):
                     col_name = expr_name[4:-1]
                     window_func = 'cummin'
@@ -924,10 +944,10 @@ class VectrillDataFrame:
                     window_func = 'cummax'
                 elif expr_name.startswith("std("):
                     col_name = expr_name[4:-1]
-                    window_func = 'cumstd'
+                    window_func = 'std'
                 elif expr_name.startswith("median("):
                     col_name = expr_name[7:-1]
-                    window_func = 'cummedian'
+                    window_func = 'median'
                 elif expr_name.startswith("lag("):
                     # Parse lag(column, offset) properly
                     inner = expr_name[4:-1]
@@ -971,12 +991,13 @@ class VectrillDataFrame:
                     col_name = parts[0].strip()
                     window_size = int(parts[1].strip()) if len(parts) > 1 else 5
                     window_func = 'rolling_std'
+                elif expr_name == "sum_when":
+                    # Handle sum_when window function
+                    col_name = None
+                    window_func = 'sum_when'
                 elif expr_name == "count()":
                     col_name = None
                     window_func = 'count'
-                elif expr_name == "sum_when":
-                    col_name = None
-                    window_func = 'sum_when'
                 else:
                     col_name = None
                     window_func = None
@@ -987,8 +1008,15 @@ class VectrillDataFrame:
                     
                     # Apply window function based on specification
                     if partition_cols and order_cols:
+                        # For sum with order by, use cumulative sum
+                        if window_func == 'sum':
+                            existing_order_cols = [col for col in order_cols if col in df.columns]
+                            sort_cols = partition_cols + existing_order_cols
+                            df_sorted = df.sort_values(sort_cols)
+                            df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].cumsum()
+                            df[name] = df_sorted[name]
                         # For lag function, we need to handle ordering properly
-                        if window_func == 'lag':
+                        elif window_func == 'lag':
                             # Parse lag offset from expression
                             offset = 1  # default
                             if expr_name.startswith("lag("):
@@ -1174,6 +1202,23 @@ class VectrillDataFrame:
                             df[name] = df.groupby(partition_cols)[col_name].transform('median')
                         elif window_func == 'lag':
                             df[name] = df.groupby(partition_cols)[col_name].shift(1)
+                        elif window_func == 'sum':
+                            # Check if there's an order_by clause to determine behavior
+                            if order_cols:
+                                # Use cumulative sum when there's ordering
+                                df[name] = df.groupby(partition_cols)[col_name].cumsum()
+                            else:
+                                # Use regular sum when there's no ordering
+                                df[name] = df.groupby(partition_cols)[col_name].transform('sum')
+                        elif window_func == 'mean':
+                            # For mean without order by, use transform to get same value for all rows (like pandas)
+                            df[name] = df.groupby(partition_cols)[col_name].transform('mean')
+                        elif window_func == 'median':
+                            # For median without order by, use transform to get same value for all rows
+                            df[name] = df.groupby(partition_cols)[col_name].transform('median')
+                        elif window_func == 'std':
+                            # For std without order by, use transform to get same value for all rows
+                            df[name] = df.groupby(partition_cols)[col_name].transform('std')
                         elif window_func == 'rolling_mean':
                             df[name] = df.groupby(partition_cols)[col_name].transform(lambda x: x.rolling(window=window_size, min_periods=1).mean())
                         elif window_func == 'rolling_std':
@@ -1181,42 +1226,34 @@ class VectrillDataFrame:
                         elif window_func == 'count':
                             df[name] = df.groupby(partition_cols).cumcount() + 1
                         elif window_func == 'sum_when':
-                            # Handle sum_when window function (same logic as above but simpler)
+                            # Handle sum_when window function - direct pandas approach
                             if hasattr(expression, 'when_expr') and expression.when_expr:
-                                # Apply when expression logic directly
                                 when_expr = expression.when_expr
-                                else_val = when_expr.otherwise_value if when_expr.otherwise_value is not None else 0
-                                df[name] = else_val
                                 
-                                # Process conditions
-                                for i, (condition, then_val) in enumerate(zip(when_expr.conditions, when_expr.then_values)):
+                                # Extract condition from when expression
+                                if when_expr.conditions and len(when_expr.conditions) > 0:
+                                    condition = when_expr.conditions[0]
+                                    then_val = when_expr.then_values[0] if when_expr.then_values else 1
+                                    else_val = when_expr.otherwise_value if when_expr.otherwise_value is not None else 0
+                                    
                                     if isinstance(condition, dict):
                                         op = condition.get("op")
                                         col_name = condition.get("col")
                                         value = condition.get("value")
                                         
-                                        if col_name in df.columns and op:
-                                            condition_result = None
-                                            
-                                            # Create condition based on operator
-                                            if op == "==":
-                                                condition_result = df[col_name] == value
-                                            elif op == "!=":
-                                                condition_result = df[col_name] != value
-                                            elif op == "<":
-                                                condition_result = df[col_name] < value
-                                            elif op == ">":
-                                                condition_result = df[col_name] > value
-                                            else:
-                                                condition_result = pd.Series([True] * len(df))
-                                            
-                                            if condition_result is not None:
-                                                # Apply condition
-                                                mask = condition_result & (df[name] == else_val)
-                                                df.loc[mask, name] = then_val
-                                
-                                # Now apply window sum
-                                df[name] = df.groupby(partition_cols)[df[name]].cumsum()
+                                        if col_name in df.columns and op == "==":
+                                            # Create condition series
+                                            condition_series = df[col_name] == value
+                                            # Create values series with then/else logic
+                                            values_series = condition_series * then_val + (~condition_series) * else_val
+                                            # Apply window sum using transform
+                                            df[name] = df.groupby(partition_cols)[values_series].transform('sum')
+                                        else:
+                                            df[name] = 0
+                                    else:
+                                        df[name] = 0
+                                else:
+                                    df[name] = 0
                             else:
                                 df[name] = 0
                     elif order_cols:
