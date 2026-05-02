@@ -29,6 +29,16 @@ try:
             
             def __init__(self, config: Optional[Dict[str, Any]] = None):
                 """Initialize placeholder sequencer."""
+                # Validate configuration to match PyO3 behavior
+                if config:
+                    # Validate ordering
+                    if "ordering" in config and config["ordering"] not in ["by_timestamp", "by_key_then_timestamp"]:
+                        raise ValueError("Invalid ordering. Use 'by_timestamp' or 'by_key_then_timestamp'")
+                    
+                    # Validate late data policy
+                    if "late_data_policy" in config and config["late_data_policy"] not in ["drop", "allow", "side_output"]:
+                        raise ValueError("Invalid late_data_policy. Use 'drop', 'allow', or 'side_output'")
+                
                 self._watermark = 0
                 self._pending_batches = 0
                 print("Warning: Using placeholder Sequencer implementation. PyO3 extension not available.")
