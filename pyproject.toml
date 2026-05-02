@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "vectrill"
-version = "0.1.0"
+dynamic = ["version"]
 description = "High-performance Arrow-native streaming engine with Python DSL and Rust execution core"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -30,7 +30,7 @@ dependencies = [
     "pyarrow>=14.0.0",
     "cffi>=1.16.0",
     "numpy>=1.24.0",
-    "pandas>=3.0.2",
+    "pandas>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -63,6 +63,10 @@ Issues = "https://github.com/FranekJemiolo/vectrill/issues"
 module-name = "vectrill._rust"
 python-source = "python"
 strip = true
+features = ["pyo3/extension-module"]
+
+[tool.maturin.python-dependencies]
+# Dependencies will be automatically included from pyproject.toml
 
 [tool.black]
 line-length = 100

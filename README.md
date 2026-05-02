@@ -188,7 +188,31 @@ See [docs/](docs/) for detailed milestone implementation plans.
 
 ## 🚀 Installation
 
-### From Source
+### 📦 From PyPI (Recommended)
+
+```bash
+# Install from PyPI (when published)
+pip install vectrill
+
+# Install with optional dependencies
+pip install vectrill[examples]  # Include marimo notebooks
+pip install vectrill[dev]       # Include development tools
+```
+
+### 🌐 From GitHub Releases
+
+```bash
+# Install latest release from GitHub
+pip install git+https://github.com/FranekJemiolo/vectrill
+
+# Install specific version
+pip install git+https://github.com/FranekJemiolo/vectrill@v0.1.0
+
+# Install from specific branch
+pip install git+https://github.com/FranekJemiolo/vectrill@main
+```
+
+### 🔧 From Source (Development)
 
 ```bash
 # Clone the repository
@@ -215,11 +239,39 @@ cargo build --features connectors-full,web-ui,cli
 maturin develop
 ```
 
-### With Python Extras
+### 📚 With Python Extras
 
 ```bash
 # Install with marimo notebooks (optional)
 pip install -e ".[examples]"
+
+# Install with development tools
+pip install -e ".[dev]"
+```
+
+### 🐍 Python Version Requirements
+
+- **Python**: 3.12+ (required)
+- **Rust**: 1.70+ (for development from source)
+- **Platform**: Linux, macOS, Windows
+
+### ⚡ Quick Start
+
+```python
+import vectrill
+import pandas as pd
+
+# Create a DataFrame
+data = pd.DataFrame({
+    'timestamp': pd.date_range('2023-01-01', periods=1000, freq='1min'),
+    'value': range(1000),
+    'category': ['A', 'B', 'C', 'D'] * 250
+})
+
+# Use Vectrill for streaming operations
+df = vectrill.from_pandas(data)
+result = df.filter(col('value') > 500).groupby('category').agg({'value': 'sum'})
+print(result.to_pandas())
 ```
 
 ---
