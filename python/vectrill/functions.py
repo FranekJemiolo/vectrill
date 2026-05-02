@@ -142,6 +142,38 @@ class BinaryExpression:
         """Set alias for the expression"""
         self.alias_name = name
         return self
+    
+    def __truediv__(self, other: Any):
+        """Division operation"""
+        if isinstance(other, ColumnExpression):
+            return BinaryExpression(self, "/", other)
+        else:
+            from .dataframe import ArithmeticExpression
+            return ArithmeticExpression(self, "/", other)
+    
+    def __mul__(self, other: Any):
+        """Multiplication operation"""
+        if isinstance(other, ColumnExpression):
+            return BinaryExpression(self, "*", other)
+        else:
+            from .dataframe import ArithmeticExpression
+            return ArithmeticExpression(self, "*", other)
+    
+    def __add__(self, other: Any):
+        """Addition operation"""
+        if isinstance(other, ColumnExpression):
+            return BinaryExpression(self, "+", other)
+        else:
+            from .dataframe import ArithmeticExpression
+            return ArithmeticExpression(self, "+", other)
+    
+    def __sub__(self, other: Any):
+        """Subtraction operation"""
+        if isinstance(other, ColumnExpression):
+            return BinaryExpression(self, "-", other)
+        else:
+            from .dataframe import ArithmeticExpression
+            return ArithmeticExpression(self, "-", other)
 
 
 class WhenExpression:

@@ -159,11 +159,26 @@ class VectrillDataFrame:
             elif expr_name == "abs":
                 # Handle abs function - need to get the column from the nested expression
                 if hasattr(expression, 'nested_expr') and expression.nested_expr:
-                    col_name = expression.nested_expr.name
-                    if col_name in df.columns:
-                        df[name] = df[col_name].abs()
+                    nested = expression.nested_expr
+                    if hasattr(nested, 'name'):
+                        # Simple column reference
+                        col_name = nested.name
+                        if col_name in df.columns:
+                            df[name] = df[col_name].abs()
+                        else:
+                            raise ValueError(f"Column '{col_name}' not found in DataFrame")
+                    elif isinstance(nested, (BinaryExpression, ArithmeticExpression)):
+                        # Handle arithmetic expression inside abs
+                        # First evaluate the nested expression
+                        temp_name = f"_temp_abs_nested_{name}"
+                        temp_table = self._apply_rust_expression(nested, temp_name)
+                        temp_df = temp_table.to_pandas()
+                        if temp_name in temp_df.columns:
+                            df[name] = temp_df[temp_name].abs()
+                        else:
+                            raise ValueError(f"Failed to evaluate nested expression for abs")
                     else:
-                        raise ValueError(f"Column '{col_name}' not found in DataFrame")
+                        raise ValueError("abs function requires a valid expression")
                 else:
                     raise ValueError("abs function requires a column argument")
             elif expr_name.startswith("var("):
@@ -343,7 +358,7 @@ class VectrillDataFrame:
             # Handle nested expressions by evaluating them first
             if hasattr(expression.left, 'name') and expression.left.name in df.columns:
                 left_val = df[expression.left.name]
-            else:
+            elif isinstance(expression.left, (BinaryExpression, ArithmeticExpression)):
                 # Evaluate nested expression
                 left_temp_name = f"_temp_left_{name}"
                 left_table = self._apply_rust_expression(expression.left, left_temp_name)
@@ -352,10 +367,12 @@ class VectrillDataFrame:
                     left_val = left_df[left_temp_name]
                 else:
                     left_val = None
+            else:
+                left_val = None
             
             if hasattr(expression.right, 'name') and expression.right.name in df.columns:
                 right_val = df[expression.right.name]
-            else:
+            elif isinstance(expression.right, (BinaryExpression, ArithmeticExpression)):
                 # Evaluate nested expression
                 right_temp_name = f"_temp_right_{name}"
                 right_table = self._apply_rust_expression(expression.right, right_temp_name)
@@ -364,6 +381,8 @@ class VectrillDataFrame:
                     right_val = right_df[right_temp_name]
                 else:
                     right_val = None
+            else:
+                right_val = None
             
             op = expression.op
             
@@ -943,35 +962,15 @@ class VectrillDataFrame:
                     inner = expr_name[13:-1]
                     parts = inner.split(", ")
                     col_name = parts[0].strip()
-                    window_spec = parts[1].strip() if len(parts) > 1 else "5"
-                    
-                    # Handle time-based windows like '1m' vs integer windows
-                    if window_spec.startswith("'") and window_spec.endswith("'"):
-                        # Time-based window like '1m'
-                        time_window = window_spec.strip("'\"")
-                        if col_name in df.columns:
-                            # For time-based windows, use a reasonable window size
-                            # 1 minute window roughly corresponds to about 600 entries (assuming 1 per second)
-                            df[name] = df[col_name].rolling(window=600, min_periods=1).mean()
-                    else:
-                        # Integer window
-                        try:
-                            window_size = int(window_spec)
-                        except ValueError:
-                            window_size = 5
-                        if col_name in df.columns:
-                            df[name] = df[col_name].rolling(window=window_size, min_periods=1).mean()
+                    window_size = int(parts[1].strip()) if len(parts) > 1 else 5
+                    window_func = 'rolling_mean'
                 elif expr_name.startswith("rolling_std("):
                     # Parse rolling_std(column, window_size)
                     inner = expr_name[12:-1]
                     parts = inner.split(", ")
                     col_name = parts[0].strip()
-                    try:
-                        window_size = int(parts[1].strip())
-                    except (ValueError, IndexError):
-                        window_size = 5
-                    if col_name in df.columns:
-                        df[name] = df[col_name].rolling(window=window_size, min_periods=1).std()
+                    window_size = int(parts[1].strip()) if len(parts) > 1 else 5
+                    window_func = 'rolling_std'
                 elif expr_name == "count()":
                     col_name = None
                     window_func = 'count'
@@ -990,6 +989,20 @@ class VectrillDataFrame:
                     if partition_cols and order_cols:
                         # For lag function, we need to handle ordering properly
                         if window_func == 'lag':
+                            # Parse lag offset from expression
+                            offset = 1  # default
+                            if expr_name.startswith("lag("):
+                                inner = expr_name[4:-1]
+                                parts = inner.split(", ")
+                                if len(parts) > 1:
+                                    try:
+                                        offset = int(parts[1].strip())
+                                    except ValueError:
+                                        offset = 1
+                            
+                            # Store original index to restore order later
+                            original_index = df.index.copy()
+                            
                             # Sort by partition and order columns for window function
                             existing_order_cols = [col for col in order_cols if col in df.columns]
                             if existing_order_cols:
@@ -999,27 +1012,12 @@ class VectrillDataFrame:
                             
                             # Apply window function on sorted data
                             df_sorted = df.sort_values(sort_cols)
-                            df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].shift(1)
+                            df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].shift(offset)
                             
-                            # Restore original order by sorting back to original index
-                            df_sorted = df_sorted.sort_index()
-                            # Make sure the index matches the original dataframe
-                            df[name] = df_sorted[name].values
-                        elif window_func == 'lead':
-                            # Sort by partition and order columns for window function
-                            existing_order_cols = [col for col in order_cols if col in df.columns]
-                            if existing_order_cols:
-                                sort_cols = partition_cols + existing_order_cols
-                            else:
-                                sort_cols = partition_cols
-                            
-                            # Apply window function on sorted data
-                            df_sorted = df.sort_values(sort_cols)
-                            df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].shift(-1)
-                            
-                            # Restore original order by sorting back to original index
-                            df_result = df_sorted.sort_index()
-                            df[name] = df_result[name].values
+                            # Map results back to original order using the original index
+                            # Create a mapping from sorted index to results
+                            result_mapping = df_sorted[name].to_dict()
+                            df[name] = df.index.map(result_mapping)
                         elif window_func == 'var':
                             df[name] = df.groupby(partition_cols)[col_name].transform('var')
                         elif window_func == 'abs':
@@ -1102,14 +1100,14 @@ class VectrillDataFrame:
                                     df[name] = df_sorted[name]
                             elif window_func == 'rolling_mean':
                                 if partition_cols:
-                                    df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).mean().reset_index(level=0, drop=True)
+                                    df[name] = df.groupby(partition_cols)[col_name].transform(lambda x: x.rolling(window=window_size, min_periods=1).mean())
                                 else:
-                                    df[name] = df[col_name].rolling(window=5, min_periods=1).mean()
+                                    df[name] = df[col_name].rolling(window=window_size, min_periods=1).mean()
                             elif window_func == 'rolling_std':
                                 if partition_cols:
-                                    df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).std().reset_index(level=0, drop=True)
+                                    df[name] = df.groupby(partition_cols)[col_name].transform(lambda x: x.rolling(window=window_size, min_periods=1).std())
                                 else:
-                                    df[name] = df[col_name].rolling(window=5, min_periods=1).std()
+                                    df[name] = df[col_name].rolling(window=window_size, min_periods=1).std()
                             elif window_func == 'count':
                                 df[name] = df.groupby(partition_cols).cumcount() + 1
                             elif window_func == 'sum_when':
@@ -1177,9 +1175,9 @@ class VectrillDataFrame:
                         elif window_func == 'lag':
                             df[name] = df.groupby(partition_cols)[col_name].shift(1)
                         elif window_func == 'rolling_mean':
-                            df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).mean()
+                            df[name] = df.groupby(partition_cols)[col_name].transform(lambda x: x.rolling(window=window_size, min_periods=1).mean())
                         elif window_func == 'rolling_std':
-                            df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).std()
+                            df[name] = df.groupby(partition_cols)[col_name].transform(lambda x: x.rolling(window=window_size, min_periods=1).std())
                         elif window_func == 'count':
                             df[name] = df.groupby(partition_cols).cumcount() + 1
                         elif window_func == 'sum_when':

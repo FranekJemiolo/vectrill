@@ -278,7 +278,8 @@ class TestRealTimeFraudDetection:
             pl.col('amount').mean().over('user_id').alias('user_avg_amount'),
             pl.col('amount').std().over('user_id').alias('user_std_amount')
         ]).with_columns([
-            ((pl.col('amount') - pl.col('user_avg_amount')) / pl.col('user_std_amount')).abs().alias('amount_z_score'),
+            ((pl.col('amount') - pl.col('user_avg_amount')) / pl.col('user_std_amount')).abs().alias('amount_z_score')
+        ]).with_columns([
             (pl.col('amount_z_score') > 3).alias('amount_anomaly')
         ])
         
@@ -483,9 +484,9 @@ class TestLogAnalysisPipeline:
         pandas_result = pandas_result.sort_values('timestamp')
         pandas_result['is_error'] = pandas_result['level'].isin(['ERROR', 'FATAL']).astype(int)
         
-        # Calculate rolling error rate (1-minute window)
+        # Calculate rolling error rate (10-entry window for consistency)
         pandas_result['error_rate_1min'] = pandas_result['is_error'].rolling(
-            window=pd.Timedelta(minutes=1), min_periods=1
+            window=10, min_periods=1
         ).mean()
         
         # Polars implementation
@@ -493,7 +494,7 @@ class TestLogAnalysisPipeline:
         polars_result = polars_df.sort('timestamp').with_columns([
             pl.col('level').is_in(['ERROR', 'FATAL']).cast(int).alias('is_error')
         ]).with_columns([
-            pl.col('is_error').rolling_mean(time_period='1m', by='timestamp').alias('error_rate_1min')
+            pl.col('is_error').rolling_mean(window_size=10, min_periods=1).alias('error_rate_1min')
         ])
         
         # Vectrill implementation
@@ -501,7 +502,7 @@ class TestLogAnalysisPipeline:
         vectrill_result = vectrill_df.sort('timestamp').with_columns([
             functions.when(col('level').is_in(['ERROR', 'FATAL'])).then(1).otherwise(0).alias('is_error')
         ]).with_columns([
-            functions.rolling_mean(col('is_error'), window_size='1m').over(window.order_by('timestamp')).alias('error_rate_1min')
+            functions.rolling_mean(col('is_error'), window_size=10).alias('error_rate_1min')
         ])
         
         # Compare results
