@@ -201,15 +201,43 @@ pip install vectrill[dev]       # Include development tools
 
 ### 🌐 From GitHub Releases
 
+#### Install v0.1.0 Release
+
+```bash
+# Install the v0.1.0 release (recommended)
+pip install git+https://github.com/FranekJemiolo/vectrill@v0.1.0
+
+# Or using the specific commit hash
+pip install git+https://github.com/FranekJemiolo/vectrill@51b1e29
+```
+
+#### Other Installation Options
+
 ```bash
 # Install latest release from GitHub
 pip install git+https://github.com/FranekJemiolo/vectrill
 
-# Install specific version
-pip install git+https://github.com/FranekJemiolo/vectrill@v0.1.0
-
-# Install from specific branch
+# Install from main branch (development version)
 pip install git+https://github.com/FranekJemiolo/vectrill@main
+
+# Install with optional dependencies
+pip install git+https://github.com/FranekJemiolo/vectrill@v0.1.0#egg=vectrill[examples,dev]
+```
+
+#### Verify Installation
+
+```bash
+# Verify the installation
+python -c "import vectrill; print(f'Vectrill {vectrill.__version__} installed successfully!')"
+
+# Test basic functionality
+python -c "
+import vectrill
+import pandas as pd
+df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
+result = vectrill.from_pandas(df).filter(vectrill.col('x') > 1)
+print(f'Filter result: {len(result)} rows')
+"
 ```
 
 ### 🔧 From Source (Development)
@@ -254,6 +282,45 @@ pip install -e ".[dev]"
 - **Python**: 3.12+ (required)
 - **Rust**: 1.70+ (for development from source)
 - **Platform**: Linux, macOS, Windows
+
+### 📋 Releases
+
+#### v0.1.0 (Current Release)
+
+**Release Date:** 2026-05-02  
+**Status:** ✅ Stable  
+
+**Features:**
+- High-performance streaming engine with Rust backend
+- Python DSL compatible with pandas/polars syntax
+- Arrow-native memory management
+- Window functions and aggregations
+- Expression engine with optimization
+- Multi-platform wheel distribution
+
+**Installation:**
+```bash
+pip install git+https://github.com/FranekJemiolo/vectrill@v0.1.0
+```
+
+**Release Notes:**
+- Initial public release
+- Complete Python API
+- Comprehensive test suite (63 tests passing)
+- GitHub Actions CI/CD pipeline
+- Multi-platform wheel building
+
+#### Release History
+
+| Version | Date | Status | Installation |
+|---------|------|--------|---------------|
+| v0.1.0 | 2026-05-02 | ✅ Stable | `pip install git+https://github.com/FranekJemiolo/vectrill@v0.1.0` |
+
+#### Upcoming Releases
+
+- **v0.2.0**: Enhanced performance and additional connectors
+- **v0.3.0**: Advanced window functions and SQL interface
+- **v1.0.0**: Production-ready with full feature set
 
 ### ⚡ Quick Start
 
