@@ -119,17 +119,28 @@ jobs:
       - name: Build and install Python package
         run: |
           source .venv/bin/activate
-          # Use the same approach that worked locally
-          unset CONDA_PREFIX
-          uv run maturin develop --release --features python
+          # Build the Rust library first
+          cargo build --release --features python
+          
+          # Install maturin and build the Python package
+          pip install maturin
+          maturin develop --release --features python
+          
           # Verify the installation
+          echo "Checking if vectrill can be imported:"
+          python -c "import vectrill; print('Vectrill imported successfully')"
           echo "Installed package contents:"
-          find .venv/lib/python3.12/site-packages/vectrill* -name "*.so" -o -name "_rust" -type d | head -10
+          find .venv/lib/python3.12/site-packages/vectrill* -name "*.so" -o -name "_rust" -type d | head -10 || echo "No vectrill package found in site-packages"
 
       - name: Run Python tests
         run: |
-          # Use uv run to ensure proper environment with all dependencies
-          # Move to temporary directory to avoid local import conflicts
-          cd /tmp
-          cp -r /home/runner/work/vectrill/vectrill/tests ./tests
-          /home/runner/work/vectrill/vectrill/.venv/bin/python -m pytest tests/python/ -v
+          source .venv/bin/activate
+          # Set PYTHONPATH to include the source directory
+          export PYTHONPATH=/home/runner/work/vectrill/vectrill/python:$PYTHONPATH
+          
+          # Verify vectrill can be imported
+          python -c "import vectrill; print('Vectrill imported successfully in test environment')"
+          
+          # Run tests from the project directory
+          cd /home/runner/work/vectrill/vectrill
+          python -m pytest tests/python/ -v --tb=short
