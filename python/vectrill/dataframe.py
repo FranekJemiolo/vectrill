@@ -945,7 +945,18 @@ class VectrillDataFrame:
                         elif window_func == 'ceil':
                             df[name] = np.ceil(df[col_name])
                         elif window_func == 'cumsum':
-                            df[name] = df.groupby(partition_cols)[col_name].cumsum()
+                            # For cumsum with order by, sort first then apply cumsum
+                            if order_cols and any(col in df.columns for col in order_cols):
+                                existing_order_cols = [col for col in order_cols if col in df.columns]
+                                sort_cols = partition_cols + existing_order_cols
+                                df_sorted = df.sort_values(sort_cols)
+                                df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].cumsum()
+                                # Restore original order by sorting back to original index
+                                df_sorted = df_sorted.sort_index()
+                                df[name] = df_sorted[name]
+                            else:
+                                # Simple cumsum without order by
+                                df[name] = df.groupby(partition_cols)[col_name].cumsum()
                         else:
                             # For other window functions, use direct pandas approach
                             if window_func == 'cummean':
