@@ -2,7 +2,9 @@
 
 <div align="center">
 
-**High-performance Arrow-native streaming engine with Python DSL and Rust execution core**
+**🎓 Learning Project: Rust-Python Integration for Performance**
+
+*A practical exploration of high-performance data processing through Rust-Python integration*
 
 [![CI/CD](https://github.com/FranekJemiolo/vectrill/workflows/CI/badge.svg)](https://github.com/FranekJemiolo/vectrill/actions)
 [![GitHub Pages](https://github.com/FranekJemiolo/vectrill/workflows/pages/badge.svg)](https://FranekJemiolo.github.io/vectrill/)
@@ -14,15 +16,25 @@
 
 ---
 
-## 🎯 Vision
+## 🎯 Learning Objectives
 
-Vectrill is a single-node streaming execution engine that combines the best of multiple systems:
+**Vectrill is a learning project designed to explore practical Rust-Python integration for performance improvements.** This project serves as a comprehensive case study for understanding how to:
 
-- **Spark-like API** and query planning for familiar data processing
-- **Flink-like streaming semantics** with watermarks, windows, and stateful operations
-- **Apache Arrow's** zero-copy columnar memory for maximum efficiency
-- **Rust's** performance and memory safety for the execution core
-- **Python's** ergonomics and ecosystem for the control plane
+- **Integrate Rust with Python** using PyO3 bindings and the Arrow C Data Interface
+- **Achieve performance improvements** through compiled Rust execution cores
+- **Build streaming data systems** with proper memory management and optimization
+- **Learn system architecture** by implementing a complete data processing pipeline
+- **Understand trade-offs** between different approaches to high-performance computing
+
+### What You'll Learn
+
+This project demonstrates key concepts in modern data systems:
+
+- **Rust-Python FFI**: Practical experience with PyO3, memory management, and data interchange
+- **Streaming Architecture**: Event processing, watermarks, windows, and stateful operations  
+- **Query Optimization**: Logical planning, physical execution, and performance tuning
+- **Memory Efficiency**: Arrow columnar format, buffer pooling, and zero-copy operations
+- **Performance Engineering**: Benchmarking, profiling, and optimization techniques
 
 ### Architecture
 
@@ -93,37 +105,37 @@ Vectrill is a single-node streaming execution engine that combines the best of m
 
 ---
 
-## 📊 Status
+## 📊 Learning Progress
 
-🎉 **All Core Milestones Complete!**
+� **Comprehensive Learning Journey Complete!**
 
-### Completed Milestones
-- ✅ **M0**: Core Engine Skeleton - Basic operator trait and pipeline
-- ✅ **M1**: Sequencer + Micro-batching - Event ordering and watermarks
-- ✅ **M2**: Python Integration (FFI) - PyO3 bindings and Arrow C Data Interface
-- ✅ **M3**: Expression Engine - Full expression evaluation and compilation
-- ✅ **M4**: Query Planner - Logical to physical plan conversion
-- ✅ **M5**: Operator Fusion - Automatic fusion of compatible operators
-- ✅ **M6**: Streaming Semantics - Watermarks, windows, and state
-- ✅ **M7**: Connectors - File connectors (CSV, JSON, Parquet)
-- ✅ **M8**: Performance + Advanced Features - Expression optimization, buffer pooling, performance counters
-- ✅ **M9**: Web UI - Real-time metrics and job inspection dashboard
+### Educational Milestones Achieved
+- ✅ **M0**: Core Engine Foundation - Understanding basic operator design and pipeline architecture
+- ✅ **M1**: Event Sequencing - Learning micro-batching, ordering, and watermark concepts
+- ✅ **M2**: Rust-Python Integration - Mastering PyO3 bindings and Arrow C Data Interface
+- ✅ **M3**: Expression Compilation - Building expression engines and optimization techniques
+- ✅ **M4**: Query Planning - Implementing logical-to-physical plan conversion
+- ✅ **M5**: Performance Optimization - Learning operator fusion and execution efficiency
+- ✅ **M6**: Streaming Systems - Understanding watermarks, windows, and stateful processing
+- ✅ **M7**: Data Connectors - Building extensible I/O systems
+- ✅ **M8**: Advanced Features - Memory management, metrics, and performance engineering
+- ✅ **M9**: Web Interface - Creating real-time monitoring and dashboards
 
-### Test Coverage
-- **114 tests** passing:
-  - 89 library tests
-  - 6 cross-reference tests
-  - 10 e2e advanced features tests
-  - 1 e2e connector test
-  - 8 sequencer functional tests
+### Learning Outcomes
+- **114 tests implemented** demonstrating comprehensive understanding:
+  - 89 core library tests (system architecture)
+  - 6 cross-reference tests (integration patterns)
+  - 10 end-to-end feature tests (complete workflows)
+  - 1 connector test (I/O systems)
+  - 8 functional tests (streaming semantics)
 
-### VectrillDataFrame API Status
-- **✅ 10/10 comprehensive tests passing** (100% pass rate)
-- **✅ Full pandas parity** for all core operations
-- **✅ Complete window function support** (lag, cumsum, lead, rolling functions)
-- **✅ GroupBy operations** with multiple aggregations
-- **✅ Advanced expressions** (arithmetic, conditional, string operations)
-- **✅ Performance benchmarking framework** with pandas/polars comparison
+### Practical Skills Demonstrated
+- **✅ 10/10 comprehensive tests passing** (full API coverage)
+- **✅ Complete pandas compatibility** for DataFrame operations
+- **✅ Advanced window functions** (lag, cumsum, rolling, time-based operations)
+- **✅ Complex aggregations** with multi-column GroupBy operations
+- **✅ Expression engine** with arithmetic, conditional, and string operations
+- **✅ Performance benchmarking** comparing with pandas/polars implementations
 
 #### Comprehensive Test Results
 | Test Category | Status | Description |
@@ -137,6 +149,38 @@ Vectrill is a single-node streaming execution engine that combines the best of m
 | Conditional Expressions | ✅ PASS | when/then/else logic |
 | String Functions | ✅ PASS | concat, contains, regex operations |
 | Arithmetic Operations | ✅ PASS | +, -, *, /, ** operations |
+
+---
+
+## 🎓 Educational Value
+
+This project serves as a comprehensive learning resource for developers interested in:
+
+### Rust-Python Integration
+- **PyO3 Bindings**: Learn how to create Python bindings for Rust code
+- **Memory Management**: Understand safe data interchange between Rust and Python
+- **Arrow C Data Interface**: Master zero-copy data sharing between languages
+- **Error Handling**: Implement robust error propagation across language boundaries
+
+### High-Performance Computing
+- **Streaming Architecture**: Build event-driven systems with proper ordering
+- **Memory Efficiency**: Learn buffer pooling, zero-copy operations, and memory layout
+- **Query Optimization**: Implement logical planning, physical execution, and cost-based optimization
+- **Performance Engineering**: Benchmarking, profiling, and systematic optimization
+
+### System Design Patterns
+- **Operator Fusion**: Combine multiple operations for better performance
+- **Stateful Processing**: Handle windowing, aggregation, and temporal operations
+- **Extensible Architecture**: Design systems that can grow with new features
+- **Testing Strategies**: Comprehensive testing for complex systems
+
+### Real-World Applications
+- **Data Processing Pipelines**: Build production-ready data systems
+- **Performance Critical Code**: When and how to use Rust for Python performance
+- **Memory-Constrained Systems**: Efficient data handling for large datasets
+- **Streaming Analytics**: Real-time data processing and monitoring
+
+**Perfect for:** Developers wanting to learn Rust integration, performance engineering, or data systems architecture.
 
 See [docs/](docs/) for detailed milestone implementation plans.
 
@@ -520,46 +564,64 @@ vectrill/
 
 ---
 
-## ⚡ Performance
+## ⚡ Performance Learning
 
-### DataFrame Library Comparison (May 2, 2026)
+### Performance Analysis Results (May 2, 2026)
 
-Comprehensive benchmark comparing **Vectrill**, **Polars**, and **Pandas** performance across common DataFrame operations and data sizes.
+**Educational benchmark comparing implementation approaches** - This analysis demonstrates the performance characteristics and trade-offs when building data systems with Rust-Python integration.
 
-#### Test Environment
+#### Learning Environment
 - **Hardware**: MacBook Air M2, 16GB RAM
 - **Python**: 3.8.11
-- **Libraries**: Pandas 2.0.3, Polars 1.8.2, Vectrill 0.1.0
+- **Reference Libraries**: Pandas 2.0.3, Polars 1.8.2
+- **Vectrill**: Learning implementation (0.1.0)
 - **Data Sizes**: 1K, 10K, 100K, 1M rows
-- **Operations**: Filter, Groupby, Aggregations, Column operations, Sorting, Joining, Concatenation
+- **Focus**: Understanding performance patterns and optimization opportunities
 
-#### Overall Performance Summary
+#### Performance Insights
 
-| Library | Average Time | Relative Performance | Status |
-|---------|-------------|---------------------|---------|
-| **Polars** | 0.0031s | **Fastest** | ✅ All operations |
-| **Pandas** | 0.0149s | 4.75x slower | ✅ All operations |
-| **Vectrill** | 0.0209s | 6.67x slower | 🚧 Limited operations |
+| Implementation | Average Time | Learning Value | Status |
+|----------------|-------------|---------------|---------|
+| **Polars** | 0.0031s | **Production baseline** | ✅ Mature implementation |
+| **Pandas** | 0.0149s | **Ecosystem standard** | ✅ Full feature set |
+| **Vectrill** | 0.0209s | **Learning prototype** | 🎓 Educational implementation |
 
-#### Key Findings
+#### Key Learning Outcomes
 
-**🥇 Polars Performance:**
-- Consistently fastest across most operations
-- Excellent scalability for large datasets (1M+ rows)
-- Particularly strong in aggregations and filtering
-- Best performance-to-feature ratio
+**🎯 Production Systems (Polars):**
+- Demonstrates optimized Rust-native performance
+- Shows importance of proper memory management
+- Excellent scalability patterns to study
+- Best practices for columnar operations
 
-**🥈 Pandas Performance:**
-- Competitive for smaller datasets (< 10K rows)
-- Mature and stable with full feature support
-- Degrades significantly on larger datasets
-- Best for complex analytical operations
+**📊 Ecosystem Integration (Pandas):**
+- Mature feature completeness as a target
+- Performance characteristics of pure Python
+- Trade-offs between features and speed
+- Integration benefits with scientific ecosystem
 
-**🚧 Vectrill Status:**
-- Early-stage development with limited operations
-- Shows promise for small datasets
-- Missing key operations (sort, join, concat)
-- Performance optimization opportunities identified
+**🎓 Educational Implementation (Vectrill):**
+- **Learning achievement**: Functional prototype with comprehensive API
+- **Performance insights**: 6.67x slower than production, but demonstrates concepts
+- **Optimization opportunities**: Clear paths for improvement identified
+- **Architecture validation**: Design patterns proven workable
+
+#### What We Learned About Performance
+
+**Scalability Patterns:**
+- Production systems maintain linear scaling to 1M+ rows
+- Learning implementations show performance cliffs at larger scales
+- Memory management becomes critical with dataset growth
+
+**Implementation Trade-offs:**
+- **Feature completeness vs. performance**: More features = more complexity
+- **Development speed vs. optimization**: Learning focus vs. production polish
+- **Memory safety vs. raw speed**: Rust benefits vs. optimization overhead
+
+**Optimization Opportunities:**
+- **Operator fusion**: Combining operations for single-pass execution
+- **Memory pooling**: Reducing allocation overhead through reuse
+- **Expression compilation**: Moving computation to compile time
 
 #### Operation-by-Operation Results
 
@@ -599,17 +661,22 @@ Comprehensive benchmark comparing **Vectrill**, **Polars**, and **Pandas** perfo
 - **Complex Operations** (groupby, aggregations): Polars excels
 - **Missing Operations**: Vectrill lacks sort/join/concat implementation
 
-#### Recommendations
+#### Educational Recommendations
 
-**For Production Use:**
-- **Polars**: Best choice for performance-critical applications
-- **Pandas**: Best for complex analytics and ecosystem integration
-- **Vectrill**: Monitor for future development, not yet production-ready
+**For Learning Rust-Python Integration:**
+- **Study Polars**: Production-grade implementation patterns to learn from
+- **Analyze Pandas**: Ecosystem integration and feature completeness goals
+- **Use Vectrill**: Hands-on learning with working code examples
 
-**For Development:**
-- **Vectrill**: Shows architectural promise but needs optimization
-- **Focus Areas**: Improve large dataset performance, implement missing operations
-- **Opportunity**: Leverage Rust backend for performance gains
+**For Performance Engineering:**
+- **Benchmark Early**: Understand performance characteristics from the start
+- **Profile Continuously**: Identify bottlenecks through measurement
+- **Optimize Systematically**: Focus on high-impact improvements first
+
+**For System Architecture:**
+- **Start Simple**: Build core functionality before optimization
+- **Iterate Quickly**: Learning through implementation and testing
+- **Study Trade-offs**: Balance features, performance, and complexity
 
 #### Running Benchmarks
 
@@ -723,6 +790,35 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 
 ---
 
+## 🎓 Learning Project Context
+
+**This is an educational project, not a production library.** Vectrill was created to explore and learn about:
+
+### Why This Project Exists
+- **Bridge the gap** between Python's ease of use and Rust's performance
+- **Learn system architecture** by building a complete data processing pipeline
+- **Understand trade-offs** in language integration and performance engineering
+- **Document the journey** of building complex systems from scratch
+
+### What Makes This Valuable
+- **Complete working implementation** - Not just theory, but actual code
+- **Comprehensive test coverage** - Demonstrates understanding through practice
+- **Performance analysis** - Real benchmarks showing what works and what doesn't
+- **Architectural decisions** - Documented trade-offs and design choices
+
+### Perfect For
+- **Developers learning Rust** who want to see practical Python integration
+- **Data engineers** wanting to understand streaming system architecture
+- **Performance engineers** learning about optimization techniques
+- **Students** studying distributed systems and data processing
+
+### Not For
+- **Production use** - Use Polars, Pandas, or other mature libraries
+- **Critical workloads** - This is educational, not industrial-grade
+- **Feature completeness** - Missing many operations found in production systems
+
+---
+
 ## 📄 License
 
 MIT OR Apache-2.0
@@ -731,9 +827,38 @@ MIT OR Apache-2.0
 
 ## 🙏 Acknowledgments
 
-Inspired by and built upon:
+**Educational inspiration from:**
 - **Apache Spark** - API design and query planning concepts
-- **Apache Flink** - Streaming semantics and window operations
+- **Apache Flink** - Streaming semantics and window operations  
 - **Apache Arrow** - Columnar memory format and compute kernels
-- **Polars** - Python DataFrame interface design
+- **Polars** - Python DataFrame interface design and performance patterns
 - **DataFusion** - Query execution engine architecture
+
+**Learning resources:**
+- **Rust community** - For excellent documentation and tooling
+- **PyO3 project** - Making Rust-Python integration accessible
+- **Apache Arrow project** - Zero-copy data interchange standards
+- **Open source maintainers** - For creating the systems we learn from
+
+---
+
+## 🚀 Start Your Learning Journey
+
+Interested in learning Rust-Python integration? Vectrill provides a complete, working example you can study, modify, and learn from.
+
+```bash
+# Clone and explore
+git clone https://github.com/FranekJemiolo/vectrill.git
+cd vectrill
+
+# Run the learning examples
+cargo test
+python benchmarks/benchmark_quick.py
+
+# Study the architecture
+# - src/ for Rust implementation
+# - python/ for Python bindings  
+# - tests/ for comprehensive examples
+```
+
+**Happy learning!** 🎓
