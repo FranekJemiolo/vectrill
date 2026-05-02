@@ -1041,9 +1041,17 @@ class VectrillDataFrame:
     
     def select(self, columns: list) -> 'VectrillDataFrame':
         """Select specific columns"""
-        df = self._arrow_table.to_pandas()
-        selected_df = df[columns]
-        return VectrillDataFrame(pa.Table.from_pandas(selected_df))
+        # Check if any of the columns are expressions
+        has_expressions = any(isinstance(col, (ColumnExpression, BinaryExpression, ArithmeticExpression, WhenExpression)) for col in columns)
+        
+        if has_expressions:
+            # Use with_columns to handle expressions
+            return self.with_columns(columns)
+        else:
+            # Simple column selection
+            df = self._arrow_table.to_pandas()
+            selected_df = df[columns]
+            return VectrillDataFrame(pa.Table.from_pandas(selected_df))
     
     def to_pandas(self) -> pd.DataFrame:
         """Convert to pandas DataFrame"""
@@ -1297,6 +1305,14 @@ class Functions:
             return ColumnExpression(f"std({column})")
     
     @staticmethod
+    def cumsum(column) -> ColumnExpression:
+        """Cumulative sum function"""
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"cumsum({column.name})")
+        else:
+            return ColumnExpression(f"cumsum({column})")
+    
+    @staticmethod
     def median(column) -> ColumnExpression:
         """Median function"""
         if isinstance(column, ColumnExpression):
@@ -1346,13 +1362,16 @@ class WhenExpression:
     
     def __init__(self, condition, then_value):
         self.conditions = [condition]
-        self.then_values = [then_value]
+        self.then_values = [then_value] if then_value is not None else []
         self.otherwise_value = None
         self.alias_name = None
     
     def then(self, then_value) -> 'WhenExpression':
         """Set the then value for the last condition"""
-        self.then_values[-1] = then_value
+        if len(self.then_values) == 0:
+            self.then_values.append(then_value)
+        else:
+            self.then_values[-1] = then_value
         return self
     
     def when(self, condition, then_value) -> 'WhenExpression':
