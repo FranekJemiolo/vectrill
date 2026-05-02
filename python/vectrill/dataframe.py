@@ -831,7 +831,10 @@ class VectrillDataFrame:
                 expr_name = base_expr.name
                 
                 # Handle different window functions
-                if expr_name.startswith("sum("):
+                if expr_name.startswith("cumsum("):
+                    col_name = expr_name[7:-1]
+                    window_func = 'cumsum'
+                elif expr_name.startswith("sum("):
                     col_name = expr_name[4:-1]
                     window_func = 'cumsum'
                 elif expr_name.startswith("mean("):
