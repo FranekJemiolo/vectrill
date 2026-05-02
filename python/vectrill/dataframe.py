@@ -73,6 +73,45 @@ class ColumnExpression:
             return BinaryExpression(self, "*", other)
         else:
             return ArithmeticExpression(self, "*", other)
+    
+    def __sub__(self, other: Any) -> 'ColumnExpression':
+        """Subtraction operation"""
+        if isinstance(other, ColumnExpression):
+            return BinaryExpression(self, "-", other)
+        else:
+            return ArithmeticExpression(self, "-", other)
+    
+    def __truediv__(self, other: Any) -> 'ColumnExpression':
+        """Division operation"""
+        if isinstance(other, ColumnExpression):
+            return BinaryExpression(self, "/", other)
+        else:
+            return ArithmeticExpression(self, "/", other)
+    
+    def __floordiv__(self, other: Any) -> 'ColumnExpression':
+        """Floor division operation"""
+        if isinstance(other, ColumnExpression):
+            return BinaryExpression(self, "//", other)
+        else:
+            return ArithmeticExpression(self, "//", other)
+    
+    def __mod__(self, other: Any) -> 'ColumnExpression':
+        """Modulo operation"""
+        if isinstance(other, ColumnExpression):
+            return BinaryExpression(self, "%", other)
+        else:
+            return ArithmeticExpression(self, "%", other)
+    
+    def __pow__(self, other: Any) -> 'ColumnExpression':
+        """Power operation"""
+        if isinstance(other, ColumnExpression):
+            return BinaryExpression(self, "**", other)
+        else:
+            return ArithmeticExpression(self, "**", other)
+    
+    def cumsum(self) -> 'ColumnExpression':
+        """Cumulative sum function"""
+        return ColumnExpression(f"cumsum({self.name})")
 
 
 class BinaryExpression:
@@ -82,6 +121,12 @@ class BinaryExpression:
         self.left = left
         self.op = op
         self.right = right
+        self.alias_name = None
+    
+    def alias(self, name: str) -> 'BinaryExpression':
+        """Set alias for the expression"""
+        self.alias_name = name
+        return self
 
 
 class ArithmeticExpression:
@@ -91,6 +136,12 @@ class ArithmeticExpression:
         self.col = col
         self.op = op
         self.value = value
+        self.alias_name = None
+    
+    def alias(self, name: str) -> 'ArithmeticExpression':
+        """Set alias for the expression"""
+        self.alias_name = name
+        return self
 
 
 class WindowExpression:
@@ -99,6 +150,12 @@ class WindowExpression:
     def __init__(self, expr: ColumnExpression, window_spec):
         self.expr = expr
         self.window_spec = window_spec
+        self.alias_name = None
+    
+    def alias(self, name: str) -> 'WindowExpression':
+        """Set alias for the expression"""
+        self.alias_name = name
+        return self
 
 
 class VectrillDataFrame:
@@ -166,6 +223,25 @@ class VectrillDataFrame:
         
         return pa.Table.from_pandas(filtered_df)
     
+    def sort(self, columns: Union[str, list]) -> 'VectrillDataFrame':
+        """Sort DataFrame by columns"""
+        if isinstance(columns, str):
+            columns = [columns]
+        
+        df = self._arrow_table.to_pandas()
+        sorted_df = df.sort_values(columns)
+        return VectrillDataFrame(pa.Table.from_pandas(sorted_df))
+    
+    def with_columns(self, expressions: list) -> 'VectrillDataFrame':
+        """Add multiple columns at once"""
+        result = self
+        for expr in expressions:
+            if isinstance(expr, tuple) and len(expr) == 2:
+                result = result.with_column(expr[0], expr[1])
+            elif hasattr(expr, 'alias_name') and expr.alias_name:
+                result = result.with_column(expr, expr.alias_name)
+        return result
+    
     def with_column(self, expression, name: str) -> 'VectrillDataFrame':
         """Add a new column with the result of an expression using Rust backend"""
         if not RUST_AVAILABLE:
@@ -210,6 +286,8 @@ class VectrillDataFrame:
             if col_name in df.columns:
                 if op == "+":
                     df[name] = df[col_name] + value
+                elif op == "-":
+                    df[name] = df[col_name] - value
                 elif op == "*":
                     df[name] = df[col_name] * value
                     # Handle extreme values properly - force infinity for large numbers as expected by test
@@ -217,6 +295,14 @@ class VectrillDataFrame:
                         # Force infinity for large values to match test expectations
                         df.loc[df[col_name].abs() >= 1e10, name] = float('inf')
                         df.loc[df[col_name].abs() <= -1e10, name] = float('-inf')
+                elif op == "/":
+                    df[name] = df[col_name] / value
+                elif op == "//":
+                    df[name] = df[col_name] // value
+                elif op == "%":
+                    df[name] = df[col_name] % value
+                elif op == "**":
+                    df[name] = df[col_name] ** value
         
         elif isinstance(expression, BinaryExpression):
             left_col = expression.left.name
@@ -226,8 +312,23 @@ class VectrillDataFrame:
             if left_col in df.columns and right_col in df.columns:
                 if op == "+":
                     df[name] = df[left_col] + df[right_col]
+                elif op == "-":
+                    result = df[left_col] - df[right_col]
+                    # Handle timestamp subtraction - convert to seconds
+                    if hasattr(result, 'dt') and hasattr(result.dt, 'total_seconds'):
+                        df[name] = result.dt.total_seconds()
+                    else:
+                        df[name] = result
                 elif op == "*":
                     df[name] = df[left_col] * df[right_col]
+                elif op == "/":
+                    df[name] = df[left_col] / df[right_col]
+                elif op == "//":
+                    df[name] = df[left_col] // df[right_col]
+                elif op == "%":
+                    df[name] = df[left_col] % df[right_col]
+                elif op == "**":
+                    df[name] = df[left_col] ** df[right_col]
         
         elif isinstance(expression, ColumnExpression):
             expr_name = expression.name
@@ -237,6 +338,10 @@ class VectrillDataFrame:
                 col_name = expr_name[4:-1]
                 if col_name in df.columns:
                     df[name] = df[col_name].sum()
+            elif expr_name.startswith("cumsum(") and expr_name.endswith(")"):
+                col_name = expr_name[7:-1]
+                if col_name in df.columns:
+                    df[name] = df[col_name].cumsum()
             elif expr_name.startswith("length(") and expr_name.endswith(")"):
                 col_name = expr_name[7:-1]
                 if col_name in df.columns:
@@ -268,6 +373,71 @@ class VectrillDataFrame:
                     
                     if col_name in df.columns:
                         df[name] = df[col_name].fillna(default_val)
+            elif expr_name.startswith("std(") and expr_name.endswith(")"):
+                col_name = expr_name[4:-1]
+                if col_name in df.columns:
+                    df[name] = df[col_name].std()
+            elif expr_name.startswith("median(") and expr_name.endswith(")"):
+                col_name = expr_name[7:-1]
+                if col_name in df.columns:
+                    df[name] = df[col_name].median()
+            elif expr_name == "abs":
+                # Handle abs operations - check if it has nested expressions
+                if hasattr(expression, 'nested_expr') and expression.nested_expr is not None:
+                    nested = expression.nested_expr
+                    if hasattr(nested, 'name') and nested.name in df.columns:
+                        df[name] = df[nested.name].abs()
+                    elif hasattr(nested, 'left') and hasattr(nested, 'op') and hasattr(nested, 'right'):
+                        # Handle arithmetic expression inside abs
+                        left_col = nested.left.name if hasattr(nested.left, 'name') else None
+                        right_col = nested.right.name if hasattr(nested.right, 'name') else None
+                        op = nested.op
+                        
+                        if left_col in df.columns and right_col in df.columns:
+                            if op == "+":
+                                df[name] = (df[left_col] + df[right_col]).abs()
+                            elif op == "*":
+                                df[name] = (df[left_col] * df[right_col]).abs()
+            elif expr_name.startswith("lag(") and expr_name.endswith(")"):
+                # Parse lag(column, offset)
+                inner = expr_name[4:-1]
+                parts = inner.split(", ")
+                col_name = parts[0].strip()
+                offset = int(parts[1].strip()) if len(parts) > 1 else 1
+                if col_name in df.columns:
+                    df[name] = df[col_name].shift(offset)
+            elif expr_name.startswith("rolling_mean(") and expr_name.endswith(")"):
+                # Parse rolling_mean(column, window_size)
+                inner = expr_name[13:-1]
+                parts = inner.split(", ")
+                col_name = parts[0].strip()
+                window_size = int(parts[1].strip())
+                if col_name in df.columns:
+                    df[name] = df[col_name].rolling(window=window_size, min_periods=1).mean()
+            elif expr_name.startswith("rolling_std(") and expr_name.endswith(")"):
+                # Parse rolling_std(column, window_size)
+                inner = expr_name[13:-1]
+                parts = inner.split(", ")
+                col_name = parts[0].strip()
+                window_size = int(parts[1].strip())
+                if col_name in df.columns:
+                    df[name] = df[col_name].rolling(window=window_size, min_periods=1).std()
+            elif expr_name == "count()":
+                # Count function - returns row count
+                df[name] = 1  # Will be used in window functions to get cumulative count
+            elif expr_name == "sum_when":
+                # Handle sum of when expression
+                if hasattr(expression, 'when_expr') and expression.when_expr:
+                    # First evaluate the when expression
+                    temp_col = f"_temp_when_{name}"
+                    when_result = self._apply_rust_expression(expression.when_expr, temp_col)
+                    temp_df = when_result.to_pandas()
+                    
+                    # Now sum the result
+                    if temp_col in temp_df.columns:
+                        df[name] = temp_df[temp_col]
+                else:
+                    df[name] = 0
             elif expr_name.startswith("pow(") and expr_name.endswith(")"):
                 # Parse pow(column, exponent)
                 inner = expr_name[4:-1]
@@ -394,39 +564,269 @@ class VectrillDataFrame:
             
             # Extract base expression
             base_expr = expression.expr
-            if hasattr(base_expr, 'name') and base_expr.name.startswith("sum("):
-                col_name = base_expr.name[4:-1]  # Extract column name from "sum(column)"
+            if hasattr(base_expr, 'name'):
+                expr_name = base_expr.name
                 
-                if col_name in df.columns:
+                # Handle different window functions
+                if expr_name.startswith("sum("):
+                    col_name = expr_name[4:-1]
+                    window_func = 'cumsum'
+                elif expr_name.startswith("mean("):
+                    col_name = expr_name[5:-1]
+                    window_func = 'cummean'
+                elif expr_name.startswith("min("):
+                    col_name = expr_name[4:-1]
+                    window_func = 'cummin'
+                elif expr_name.startswith("max("):
+                    col_name = expr_name[4:-1]
+                    window_func = 'cummax'
+                elif expr_name.startswith("std("):
+                    col_name = expr_name[4:-1]
+                    window_func = 'cumstd'
+                elif expr_name.startswith("median("):
+                    col_name = expr_name[7:-1]
+                    window_func = 'cummedian'
+                elif expr_name.startswith("lag("):
+                    col_name = expr_name[4:-1]
+                    window_func = 'lag'
+                elif expr_name.startswith("rolling_mean("):
+                    col_name = expr_name[13:-1]
+                    window_func = 'rolling_mean'
+                elif expr_name.startswith("rolling_std("):
+                    col_name = expr_name[13:-1]
+                    window_func = 'rolling_std'
+                elif expr_name == "count()":
+                    col_name = None
+                    window_func = 'count'
+                elif expr_name == "sum_when":
+                    col_name = None
+                    window_func = 'sum_when'
+                else:
+                    col_name = None
+                    window_func = None
+                
+                if col_name is not None and col_name in df.columns:
                     partition_cols = rust_spec.get('partition_by', [])
                     order_cols = rust_spec.get('order_by', [])
                     
                     # Apply window function based on specification
                     if partition_cols and order_cols:
-                        # Sort by partition and order columns, then apply cumulative sum
-                        # Filter out columns that don't exist
+                        # Sort by partition and order columns
                         existing_order_cols = [col for col in order_cols if col in df.columns]
                         if existing_order_cols:
                             sort_cols = partition_cols + existing_order_cols
                             df = df.sort_values(sort_cols)
                         else:
-                            # If no valid order columns, just sort by partition columns
                             df = df.sort_values(partition_cols)
-                        df[name] = df.groupby(partition_cols)[col_name].cumsum()
+                        
+                        # Apply window function
+                        if window_func == 'cumsum':
+                            df[name] = df.groupby(partition_cols)[col_name].cumsum()
+                        elif window_func == 'cummean':
+                            # For mean without order by, use transform to get same value for all rows (like pandas)
+                            if not existing_order_cols:
+                                df[name] = df.groupby(partition_cols)[col_name].transform('mean')
+                            else:
+                                result = df.groupby(partition_cols)[col_name].expanding().mean()
+                                # Reset index to align with original DataFrame
+                                df[name] = result.reset_index(level=0, drop=True)
+                        elif window_func == 'cummin':
+                            # For min without order by, use transform to get same value for all rows
+                            if not existing_order_cols:
+                                df[name] = df.groupby(partition_cols)[col_name].transform('min')
+                            else:
+                                df[name] = df.groupby(partition_cols)[col_name].cummin()
+                        elif window_func == 'cummax':
+                            # For max without order by, use transform to get same value for all rows
+                            if not existing_order_cols:
+                                df[name] = df.groupby(partition_cols)[col_name].transform('max')
+                            else:
+                                df[name] = df.groupby(partition_cols)[col_name].cummax()
+                        elif window_func == 'cumstd':
+                            # For std without order by, use transform to get same value for all rows (like pandas)
+                            if not existing_order_cols:
+                                df[name] = df.groupby(partition_cols)[col_name].transform('std')
+                            else:
+                                result = df.groupby(partition_cols)[col_name].expanding().std()
+                                # Reset index to align with original DataFrame
+                                df[name] = result.reset_index(level=0, drop=True)
+                        elif window_func == 'cummedian':
+                            # For median without order by, use transform to get same value for all rows (like pandas)
+                            if not existing_order_cols:
+                                df[name] = df.groupby(partition_cols)[col_name].transform('median')
+                            else:
+                                result = df.groupby(partition_cols)[col_name].expanding().median()
+                                # Reset index to align with original DataFrame
+                                df[name] = result.reset_index(level=0, drop=True)
+                        elif window_func == 'lag':
+                            df[name] = df.groupby(partition_cols)[col_name].shift(1)
+                        elif window_func == 'rolling_mean':
+                            df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).mean()
+                        elif window_func == 'rolling_std':
+                            df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).std()
+                        elif window_func == 'count':
+                            df[name] = df.groupby(partition_cols).cumcount() + 1
+                        elif window_func == 'sum_when':
+                            # Handle sum_when window function
+                            if hasattr(expression, 'when_expr') and expression.when_expr:
+                                # First evaluate the when expression
+                                temp_col = f"_temp_when_{name}"
+                                temp_df = df.copy()
+                                
+                                # Apply when expression logic
+                                when_expr = expression.when_expr
+                                else_val = when_expr.otherwise_value if when_expr.otherwise_value is not None else 0
+                                temp_df[name] = else_val
+                                
+                                # Process conditions
+                                for i, (condition, then_val) in enumerate(zip(when_expr.conditions, when_expr.then_values)):
+                                    if isinstance(condition, dict):
+                                        op = condition.get("op")
+                                        col_name = condition.get("col")
+                                        value = condition.get("value")
+                                        
+                                        if col_name in temp_df.columns and op:
+                                            condition_result = None
+                                            
+                                            # Create condition based on operator
+                                            if op == "==":
+                                                condition_result = temp_df[col_name] == value
+                                            elif op == "!=":
+                                                condition_result = temp_df[col_name] != value
+                                            elif op == "<":
+                                                condition_result = temp_df[col_name] < value
+                                            elif op == ">":
+                                                condition_result = temp_df[col_name] > value
+                                            else:
+                                                condition_result = pd.Series([True] * len(temp_df))
+                                            
+                                            if condition_result is not None:
+                                                # Apply condition
+                                                mask = condition_result & (temp_df[name] == else_val)
+                                                temp_df.loc[mask, name] = then_val
+                                
+                                # Now apply window sum
+                                df[name] = df.groupby(partition_cols)[temp_df[name]].cumsum()
+                            else:
+                                df[name] = 0
+                        
                         df = df.sort_index()
                     elif partition_cols:
                         # Only partition by
-                        df[name] = df.groupby(partition_cols)[col_name].cumsum()
+                        if window_func == 'cumsum':
+                            df[name] = df.groupby(partition_cols)[col_name].cumsum()
+                        elif window_func == 'cummean':
+                            # For mean without order by, use transform to get same value for all rows (like pandas)
+                            df[name] = df.groupby(partition_cols)[col_name].transform('mean')
+                        elif window_func == 'cummin':
+                            # For min without order by, use transform to get same value for all rows
+                            df[name] = df.groupby(partition_cols)[col_name].transform('min')
+                        elif window_func == 'cummax':
+                            # For max without order by, use transform to get same value for all rows
+                            df[name] = df.groupby(partition_cols)[col_name].transform('max')
+                        elif window_func == 'cumstd':
+                            # For std without order by, use transform to get same value for all rows (like pandas)
+                            df[name] = df.groupby(partition_cols)[col_name].transform('std')
+                        elif window_func == 'cummedian':
+                            # For median without order by, use transform to get same value for all rows (like pandas)
+                            df[name] = df.groupby(partition_cols)[col_name].transform('median')
+                        elif window_func == 'lag':
+                            df[name] = df.groupby(partition_cols)[col_name].shift(1)
+                        elif window_func == 'rolling_mean':
+                            df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).mean()
+                        elif window_func == 'rolling_std':
+                            df[name] = df.groupby(partition_cols)[col_name].rolling(window=5, min_periods=1).std()
+                        elif window_func == 'count':
+                            df[name] = df.groupby(partition_cols).cumcount() + 1
+                        elif window_func == 'sum_when':
+                            # Handle sum_when window function (same logic as above but simpler)
+                            if hasattr(expression, 'when_expr') and expression.when_expr:
+                                # Apply when expression logic directly
+                                when_expr = expression.when_expr
+                                else_val = when_expr.otherwise_value if when_expr.otherwise_value is not None else 0
+                                df[name] = else_val
+                                
+                                # Process conditions
+                                for i, (condition, then_val) in enumerate(zip(when_expr.conditions, when_expr.then_values)):
+                                    if isinstance(condition, dict):
+                                        op = condition.get("op")
+                                        col_name = condition.get("col")
+                                        value = condition.get("value")
+                                        
+                                        if col_name in df.columns and op:
+                                            condition_result = None
+                                            
+                                            # Create condition based on operator
+                                            if op == "==":
+                                                condition_result = df[col_name] == value
+                                            elif op == "!=":
+                                                condition_result = df[col_name] != value
+                                            elif op == "<":
+                                                condition_result = df[col_name] < value
+                                            elif op == ">":
+                                                condition_result = df[col_name] > value
+                                            else:
+                                                condition_result = pd.Series([True] * len(df))
+                                            
+                                            if condition_result is not None:
+                                                # Apply condition
+                                                mask = condition_result & (df[name] == else_val)
+                                                df.loc[mask, name] = then_val
+                                
+                                # Now apply window sum
+                                df[name] = df.groupby(partition_cols)[df[name]].cumsum()
+                            else:
+                                df[name] = 0
                     elif order_cols:
                         # Only order by
                         existing_order_cols = [col for col in order_cols if col in df.columns]
                         if existing_order_cols:
                             df = df.sort_values(existing_order_cols)
-                        df[name] = df[col_name].cumsum()
+                        
+                        if window_func == 'cumsum':
+                            df[name] = df[col_name].cumsum()
+                        elif window_func == 'cummean':
+                            df[name] = df[col_name].expanding().mean()
+                        elif window_func == 'cummin':
+                            df[name] = df[col_name].cummin()
+                        elif window_func == 'cummax':
+                            df[name] = df[col_name].cummax()
+                        elif window_func == 'cumstd':
+                            df[name] = df[col_name].expanding().std()
+                        elif window_func == 'cummedian':
+                            df[name] = df[col_name].expanding().median()
+                        elif window_func == 'lag':
+                            df[name] = df[col_name].shift(1)
+                        elif window_func == 'rolling_mean':
+                            df[name] = df[col_name].rolling(window=5, min_periods=1).mean()
+                        elif window_func == 'rolling_std':
+                            df[name] = df[col_name].rolling(window=5, min_periods=1).std()
+                        elif window_func == 'count':
+                            df[name] = range(1, len(df) + 1)
+                        
                         df = df.sort_index()
                     else:
-                        # No partition or order - simple cumulative sum
-                        df[name] = df[col_name].cumsum()
+                        # No partition or order - simple window function
+                        if window_func == 'cumsum':
+                            df[name] = df[col_name].cumsum()
+                        elif window_func == 'cummean':
+                            df[name] = df[col_name].expanding().mean()
+                        elif window_func == 'cummin':
+                            df[name] = df[col_name].cummin()
+                        elif window_func == 'cummax':
+                            df[name] = df[col_name].cummax()
+                        elif window_func == 'cumstd':
+                            df[name] = df[col_name].expanding().std()
+                        elif window_func == 'cummedian':
+                            df[name] = df[col_name].expanding().median()
+                        elif window_func == 'lag':
+                            df[name] = df[col_name].shift(1)
+                        elif window_func == 'rolling_mean':
+                            df[name] = df[col_name].rolling(window=5, min_periods=1).mean()
+                        elif window_func == 'rolling_std':
+                            df[name] = df[col_name].rolling(window=5, min_periods=1).std()
+                        elif window_func == 'count':
+                            df[name] = range(1, len(df) + 1)
                     
                     return pa.Table.from_pandas(df)
         
@@ -436,6 +836,12 @@ class VectrillDataFrame:
     def group_by(self, columns: Union[str, list]) -> 'GroupBy':
         """Group DataFrame by columns"""
         return GroupBy(self._arrow_table, columns)
+    
+    def select(self, columns: list) -> 'VectrillDataFrame':
+        """Select specific columns"""
+        df = self._arrow_table.to_pandas()
+        selected_df = df[columns]
+        return VectrillDataFrame(pa.Table.from_pandas(selected_df))
     
     def to_pandas(self) -> pd.DataFrame:
         """Convert to pandas DataFrame"""
@@ -542,39 +948,65 @@ class Functions:
     """Functions module for compatibility with tests"""
     
     @staticmethod
-    def sum(column: str) -> ColumnExpression:
+    def sum(column) -> ColumnExpression:
         """Sum function"""
-        return ColumnExpression(f"sum({column})")
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"sum({column.name})")
+        elif isinstance(column, WhenExpression):
+            # Handle WhenExpression by creating a special sum expression
+            result = ColumnExpression("sum_when")
+            result.when_expr = column
+            return result
+        else:
+            return ColumnExpression(f"sum({column})")
     
     @staticmethod
-    def mean(column: str) -> ColumnExpression:
+    def mean(column) -> ColumnExpression:
         """Mean function"""
-        return ColumnExpression(f"mean({column})")
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"mean({column.name})")
+        else:
+            return ColumnExpression(f"mean({column})")
     
     @staticmethod
-    def min(column: str) -> ColumnExpression:
+    def min(column) -> ColumnExpression:
         """Min function"""
-        return ColumnExpression(f"min({column})")
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"min({column.name})")
+        else:
+            return ColumnExpression(f"min({column})")
     
     @staticmethod
-    def max(column: str) -> ColumnExpression:
+    def max(column) -> ColumnExpression:
         """Max function"""
-        return ColumnExpression(f"max({column})")
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"max({column.name})")
+        else:
+            return ColumnExpression(f"max({column})")
     
     @staticmethod
-    def count(column: str) -> ColumnExpression:
+    def count(column) -> ColumnExpression:
         """Count function"""
-        return ColumnExpression(f"count({column})")
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"count({column.name})")
+        else:
+            return ColumnExpression(f"count({column})")
     
     @staticmethod
-    def length(column: str) -> ColumnExpression:
+    def length(column) -> ColumnExpression:
         """String length function"""
-        return ColumnExpression(f"length({column})")
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"length({column.name})")
+        else:
+            return ColumnExpression(f"length({column})")
     
     @staticmethod
-    def upper(column: str) -> ColumnExpression:
+    def upper(column) -> ColumnExpression:
         """String upper function"""
-        return ColumnExpression(f"upper({column})")
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"upper({column.name})")
+        else:
+            return ColumnExpression(f"upper({column})")
     
     @staticmethod
     def sqrt(expression) -> ColumnExpression:
@@ -587,19 +1019,77 @@ class Functions:
         return result
     
     @staticmethod
-    def pow(column: str, exponent: int) -> ColumnExpression:
+    def pow(column, exponent: int) -> ColumnExpression:
         """Power function"""
-        return ColumnExpression(f"pow({column}, {exponent})")
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"pow({column.name}, {exponent})")
+        else:
+            return ColumnExpression(f"pow({column}, {exponent})")
     
     @staticmethod
-    def when(condition, then_value) -> 'WhenExpression':
+    def when(condition) -> 'WhenExpression':
         """When-then conditional expression"""
-        return WhenExpression(condition, then_value)
+        return WhenExpression(condition, None)
     
     @staticmethod
-    def coalesce(column: str, default: Any) -> ColumnExpression:
+    def coalesce(column, default: Any) -> ColumnExpression:
         """Coalesce function"""
-        return ColumnExpression(f"coalesce({column}, {default})")
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"coalesce({column.name}, {default})")
+        else:
+            return ColumnExpression(f"coalesce({column}, {default})")
+    
+    @staticmethod
+    def std(column) -> ColumnExpression:
+        """Standard deviation function"""
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"std({column.name})")
+        else:
+            return ColumnExpression(f"std({column})")
+    
+    @staticmethod
+    def median(column) -> ColumnExpression:
+        """Median function"""
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"median({column.name})")
+        else:
+            return ColumnExpression(f"median({column})")
+    
+    @staticmethod
+    def abs(expression) -> ColumnExpression:
+        """Absolute value function"""
+        result = ColumnExpression("abs")
+        result.nested_expr = expression
+        return result
+    
+    @staticmethod
+    def lag(column, offset: int = 1) -> ColumnExpression:
+        """Lag function for window operations"""
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"lag({column.name}, {offset})")
+        else:
+            return ColumnExpression(f"lag({column}, {offset})")
+    
+    @staticmethod
+    def rolling_mean(column, window_size: int) -> ColumnExpression:
+        """Rolling mean function"""
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"rolling_mean({column.name}, {window_size})")
+        else:
+            return ColumnExpression(f"rolling_mean({column}, {window_size})")
+    
+    @staticmethod
+    def rolling_std(column, window_size: int) -> ColumnExpression:
+        """Rolling standard deviation function"""
+        if isinstance(column, ColumnExpression):
+            return ColumnExpression(f"rolling_std({column.name}, {window_size})")
+        else:
+            return ColumnExpression(f"rolling_std({column}, {window_size})")
+    
+    @staticmethod
+    def count() -> ColumnExpression:
+        """Count function without column parameter"""
+        return ColumnExpression("count()")
 
 
 class WhenExpression:
@@ -609,6 +1099,12 @@ class WhenExpression:
         self.conditions = [condition]
         self.then_values = [then_value]
         self.otherwise_value = None
+        self.alias_name = None
+    
+    def then(self, then_value) -> 'WhenExpression':
+        """Set the then value for the last condition"""
+        self.then_values[-1] = then_value
+        return self
     
     def when(self, condition, then_value) -> 'WhenExpression':
         """Chain another when-then"""
@@ -619,6 +1115,11 @@ class WhenExpression:
     def otherwise(self, else_value) -> 'WhenExpression':
         """Set else value"""
         self.otherwise_value = else_value
+        return self
+    
+    def alias(self, name: str) -> 'WhenExpression':
+        """Set alias for the expression"""
+        self.alias_name = name
         return self
 
 
