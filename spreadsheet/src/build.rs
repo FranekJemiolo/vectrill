@@ -23,6 +23,24 @@ fn main() {
         // Generate Windows-specific bindings
         generate_windows_bindings(&windows_out);
         
+        // Real-time processing bindings
+        pub struct RealTimeProcessor {
+            update_sender: tokio::sync::mpsc::UnboundedSender<RealTimeUpdate>,
+        }
+
+        impl RealTimeProcessor {
+            pub fn new() -> Self {
+                let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+                Self {
+                    update_sender: sender,
+                }
+            }
+            
+            pub fn subscribe(&self) -> tokio::sync::mpsc::UnboundedReceiver<RealTimeUpdate> {
+                self.update_sender.subscribe()
+            }
+        }
+        
         // Copy Windows resources
         copy_windows_resources(&windows_out);
         

@@ -77,6 +77,97 @@ This project demonstrates key concepts in modern data systems:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Architecture Diagram
+
+```mermaid
+graph TD
+    subgraph "Python Layer (Control Plane)"
+        A[Python API] --> B[Query Builder]
+        B --> C[Logical DAG]
+        C --> D[Query Planner]
+    end
+    
+    subgraph "Rust Runtime (Execution Engine)"
+        D --> E[Physical Plan]
+        E --> F[Streaming Engine]
+        F --> G[Expression Optimizer]
+        F --> H[Memory Manager]
+        F --> I[Performance Monitor]
+    end
+    
+    subgraph "Arrow Operators"
+        G --> J[Stateless Operators]
+        G --> K[Stateful Operators]
+        J --> L[Map, Filter, Aggregate]
+        J --> M[Join Operations]
+        K --> N[Window Functions]
+        K --> O[State Management]
+        N --> PP[Tumbling Windows]
+        N --> QQ[Sliding Windows]
+        N --> RR[Session Windows]
+    end
+    
+    subgraph "Data Connectors"
+        S[File Connector] --> T[CSV Reader]
+        S --> U[JSON Reader]
+        S --> V[Parquet Reader]
+        W[Memory Connector] --> X[In-Memory Data]
+        Y[Extensible Design] --> Z[Kafka Connector]
+        Y --> AA[PostgreSQL Connector]
+    end
+    
+    subgraph "Optimization Pipeline"
+        BB[Constant Folding] --> CC[Pre-computation]
+        DD[CSE] --> EE[Duplicate Elimination]
+        FF[Operator Fusion] --> GG[Performance Boost]
+        HH[Buffer Pooling] --> II[Memory Efficiency]
+        JJ[Performance Counters] --> KK[Metrics Collection]
+    end
+    
+    subgraph "Data Flow"
+        LL[Input Data] --> S
+        S --> MM[Arrow Arrays]
+        MM --> J
+        J --> NN[Processing Pipeline]
+        NN --> OO[Optimized Execution]
+        OO --> PP[Micro-batches]
+        PP --> QQ[Output Results]
+    end
+    
+    subgraph "Memory Management"
+        RR[Arrow Buffer Pool] --> SS[Array Reuse]
+        RR --> TT[Memory Allocation]
+        RR --> UU[Zero-Copy Operations]
+        VV[Columnar Format] --> WW[Cache Efficiency]
+        XX[Memory Mapping] --> YY[Large File Support]
+    end
+    
+    subgraph "Performance Features"
+        ZZ[Streaming Semantics] --> AAA[Watermarks]
+        ZZ --> BBB[Event Processing]
+        CCC[Query Optimization] --> DDD[Projection Elimination]
+        CCC --> EEE[Predicate Pushdown]
+        FFF[Monitoring] --> GGG[Rows Processed]
+        FFF --> HHH[Batch Timing]
+        FFF --> III[Memory Usage]
+    end
+    
+    subgraph "Integration Points"
+        JJJ[PyO3 Bindings] --> KKK[Python-Rust FFI]
+        LLL[Arrow C Data Interface] --> MMM[Zero-Copy Transfer]
+        NNN[Type System] --> OOO[Schema Validation]
+        PPP[Error Handling] --> QQQ[Cross-Language Exceptions]
+    end
+    
+    subgraph "Development Tools"
+        RRR[Benchmarking] --> SSS[Performance Tests]
+        TTT[Profiling] --> UUU[Bottleneck Analysis]
+        VVV[Testing Framework] --> WWW[Unit & Integration Tests]
+        XXX[Documentation] --> YYY[API Reference]
+        ZZZ[Examples] --> AAAA[Use Cases]
+    end
+```
+
 ---
 
 ## ✨ Features
