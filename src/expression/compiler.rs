@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::expression::{
     map_python_bool_op, map_python_operator, map_python_unary_op, Expr, Operator, ScalarValue,
+    UnaryOp,
 };
 
 /// Python AST node representation
@@ -25,6 +26,8 @@ pub struct CompileResult {
 pub struct ExpressionCompiler {
     /// Available column names for validation
     available_columns: Option<std::collections::HashSet<String>>,
+    /// Enable constant folding optimization
+    enable_constant_folding: bool,
 }
 
 impl Default for ExpressionCompiler {
@@ -38,6 +41,7 @@ impl ExpressionCompiler {
     pub fn new() -> Self {
         Self {
             available_columns: None,
+            enable_constant_folding: true,
         }
     }
 
@@ -45,7 +49,14 @@ impl ExpressionCompiler {
     pub fn with_columns(available_columns: std::collections::HashSet<String>) -> Self {
         Self {
             available_columns: Some(available_columns),
+            enable_constant_folding: true,
         }
+    }
+
+    /// Enable or disable constant folding optimization
+    pub fn with_constant_folding(mut self, enable: bool) -> Self {
+        self.enable_constant_folding = enable;
+        self
     }
 
     /// Compile a Python AST node to an expression
@@ -59,7 +70,17 @@ impl ExpressionCompiler {
             }
         };
 
-        CompileResult { expr, errors }
+        // Apply constant folding optimization if enabled
+        let optimized_expr = if self.enable_constant_folding {
+            self.constant_fold(&expr)
+        } else {
+            expr
+        };
+
+        CompileResult {
+            expr: optimized_expr,
+            errors,
+        }
     }
 
     /// Compile a single AST node
@@ -268,6 +289,226 @@ impl ExpressionCompiler {
             }
             "abs" | "length" => Ok(Expr::function(func_name.to_string(), args)),
             _ => Ok(Expr::function(func_name.to_string(), args)),
+        }
+    }
+
+    /// Apply constant folding optimization to an expression
+    fn constant_fold(&self, expr: &Expr) -> Expr {
+        // If constant folding is disabled, return expression as-is
+        if !self.enable_constant_folding {
+            return expr.clone();
+        }
+
+        match expr {
+            Expr::Binary { left, op, right } => {
+                let folded_left = self.constant_fold(left);
+                let folded_right = self.constant_fold(right);
+
+                // Try to evaluate if both operands are constants
+                if let (Expr::Literal(left_val), Expr::Literal(right_val)) =
+                    (&folded_left, &folded_right)
+                {
+                    if let Some(result) = self.evaluate_binary_op(*op, left_val, right_val) {
+                        return Expr::Literal(result);
+                    }
+                }
+
+                // Return folded binary expression
+                Expr::Binary {
+                    left: Box::new(folded_left),
+                    op: *op,
+                    right: Box::new(folded_right),
+                }
+            }
+            Expr::Unary { op, expr } => {
+                let folded_expr = self.constant_fold(expr);
+
+                // Try to evaluate if operand is constant
+                if let Expr::Literal(val) = &folded_expr {
+                    if let Some(result) = self.evaluate_unary_op(*op, val) {
+                        return Expr::Literal(result);
+                    }
+                }
+
+                // Return folded unary expression
+                Expr::Unary {
+                    op: *op,
+                    expr: Box::new(folded_expr),
+                }
+            }
+            Expr::Function { name, args } => {
+                let folded_args: Vec<Expr> =
+                    args.iter().map(|arg| self.constant_fold(arg)).collect();
+
+                // Try to evaluate if all arguments are constants
+                if folded_args
+                    .iter()
+                    .all(|arg| matches!(arg, Expr::Literal(_)))
+                {
+                    if let Some(result) = self.evaluate_function(name, &folded_args) {
+                        return Expr::Literal(result);
+                    }
+                }
+
+                // Return folded function call
+                Expr::Function {
+                    name: name.clone(),
+                    args: folded_args,
+                }
+            }
+            Expr::Cast { expr, data_type } => {
+                let folded_expr = self.constant_fold(expr);
+
+                // Try to evaluate if operand is constant
+                if let Expr::Literal(val) = &folded_expr {
+                    if let Some(result) = self.evaluate_cast(val, data_type) {
+                        return Expr::Literal(result);
+                    }
+                }
+
+                // Return folded cast expression
+                Expr::Cast {
+                    expr: Box::new(folded_expr),
+                    data_type: data_type.clone(),
+                }
+            }
+            // Base cases - literals and columns are already optimal
+            Expr::Literal(_) | Expr::Column(_) => expr.clone(),
+        }
+    }
+
+    /// Evaluate a binary operation on constant values
+    fn evaluate_binary_op(
+        &self,
+        op: Operator,
+        left: &ScalarValue,
+        right: &ScalarValue,
+    ) -> Option<ScalarValue> {
+        match (left, right) {
+            (ScalarValue::Int64(l), ScalarValue::Int64(r)) => {
+                match op {
+                    Operator::Add => Some(ScalarValue::Int64(l + r)),
+                    Operator::Sub => Some(ScalarValue::Int64(l - r)),
+                    Operator::Mul => Some(ScalarValue::Int64(l * r)),
+                    Operator::Div => {
+                        if *r != 0 {
+                            Some(ScalarValue::Int64(l / r))
+                        } else {
+                            None // Division by zero
+                        }
+                    }
+                    Operator::Eq => Some(ScalarValue::Boolean(l == r)),
+                    Operator::NotEq => Some(ScalarValue::Boolean(l != r)),
+                    Operator::Lt => Some(ScalarValue::Boolean(l < r)),
+                    Operator::LtEq => Some(ScalarValue::Boolean(l <= r)),
+                    Operator::Gt => Some(ScalarValue::Boolean(l > r)),
+                    Operator::GtEq => Some(ScalarValue::Boolean(l >= r)),
+                    _ => None,
+                }
+            }
+            (ScalarValue::Float64(l), ScalarValue::Float64(r)) => {
+                match op {
+                    Operator::Add => Some(ScalarValue::Float64(l + r)),
+                    Operator::Sub => Some(ScalarValue::Float64(l - r)),
+                    Operator::Mul => Some(ScalarValue::Float64(l * r)),
+                    Operator::Div => {
+                        if *r != 0.0 {
+                            Some(ScalarValue::Float64(l / r))
+                        } else {
+                            None // Division by zero
+                        }
+                    }
+                    Operator::Eq => Some(ScalarValue::Boolean((l - r).abs() < f64::EPSILON)),
+                    Operator::NotEq => Some(ScalarValue::Boolean((l - r).abs() >= f64::EPSILON)),
+                    Operator::Lt => Some(ScalarValue::Boolean(l < r)),
+                    Operator::LtEq => Some(ScalarValue::Boolean(l <= r)),
+                    Operator::Gt => Some(ScalarValue::Boolean(l > r)),
+                    Operator::GtEq => Some(ScalarValue::Boolean(l >= r)),
+                    _ => None,
+                }
+            }
+            (ScalarValue::Boolean(l), ScalarValue::Boolean(r)) => match op {
+                Operator::Eq => Some(ScalarValue::Boolean(l == r)),
+                Operator::NotEq => Some(ScalarValue::Boolean(l != r)),
+                _ => None,
+            },
+            (ScalarValue::Utf8(l), ScalarValue::Utf8(r)) => match op {
+                Operator::Eq => Some(ScalarValue::Boolean(l == r)),
+                Operator::NotEq => Some(ScalarValue::Boolean(l != r)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// Evaluate a unary operation on a constant value
+    fn evaluate_unary_op(&self, op: UnaryOp, val: &ScalarValue) -> Option<ScalarValue> {
+        match val {
+            ScalarValue::Int64(v) => {
+                match op {
+                    UnaryOp::Neg => Some(ScalarValue::Int64(-v)),
+                    UnaryOp::Not => Some(ScalarValue::Boolean(*v == 0)),
+                    UnaryOp::IsNull | UnaryOp::IsNotNull => None, // Cannot evaluate at compile time
+                }
+            }
+            ScalarValue::Float64(v) => {
+                match op {
+                    UnaryOp::Neg => Some(ScalarValue::Float64(-v)),
+                    UnaryOp::Not => Some(ScalarValue::Boolean((v - 0.0).abs() < f64::EPSILON)),
+                    UnaryOp::IsNull | UnaryOp::IsNotNull => None, // Cannot evaluate at compile time
+                }
+            }
+            ScalarValue::Boolean(v) => {
+                match op {
+                    UnaryOp::Not => Some(ScalarValue::Boolean(!v)),
+                    UnaryOp::Neg => None, // Cannot negate boolean at compile time
+                    UnaryOp::IsNull | UnaryOp::IsNotNull => None, // Cannot evaluate at compile time
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Evaluate a function call on constant arguments
+    fn evaluate_function(&self, name: &str, args: &[Expr]) -> Option<ScalarValue> {
+        match name {
+            "abs" => {
+                if args.len() == 1 {
+                    if let Expr::Literal(ScalarValue::Int64(v)) = &args[0] {
+                        return Some(ScalarValue::Int64(v.abs()));
+                    }
+                    if let Expr::Literal(ScalarValue::Float64(v)) = &args[0] {
+                        return Some(ScalarValue::Float64(v.abs()));
+                    }
+                }
+            }
+            "length" => {
+                if args.len() == 1 {
+                    if let Expr::Literal(ScalarValue::Utf8(s)) = &args[0] {
+                        return Some(ScalarValue::Int64(s.len() as i64));
+                    }
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
+    /// Evaluate a cast operation on a constant value
+    fn evaluate_cast(&self, val: &ScalarValue, target_type: &str) -> Option<ScalarValue> {
+        match target_type {
+            "Int64" => match val {
+                ScalarValue::Float64(v) => Some(ScalarValue::Int64(*v as i64)),
+                ScalarValue::Utf8(s) => s.parse::<i64>().ok().map(ScalarValue::Int64),
+                _ => None,
+            },
+            "Float64" => match val {
+                ScalarValue::Int64(v) => Some(ScalarValue::Float64(*v as f64)),
+                ScalarValue::Utf8(s) => s.parse::<f64>().ok().map(ScalarValue::Float64),
+                _ => None,
+            },
+            "Utf8" => Some(ScalarValue::Utf8(val.to_string())),
+            _ => None,
         }
     }
 }
@@ -525,6 +766,126 @@ mod tests {
 
         let expr = expr_from_string("'hello'");
         assert_eq!(expr, Expr::Literal(ScalarValue::Utf8("hello".to_string())));
+    }
+
+    #[test]
+    fn test_constant_folding_binary_operations() {
+        let compiler = ExpressionCompiler::new();
+
+        // Test constant folding for addition
+        let expr = Expr::binary(
+            Expr::Literal(ScalarValue::Int64(5)),
+            Operator::Add,
+            Expr::Literal(ScalarValue::Int64(3)),
+        );
+        let folded = compiler.constant_fold(&expr);
+        assert_eq!(folded, Expr::Literal(ScalarValue::Int64(8)));
+
+        // Test constant folding for multiplication
+        let expr = Expr::binary(
+            Expr::Literal(ScalarValue::Int64(4)),
+            Operator::Mul,
+            Expr::Literal(ScalarValue::Int64(6)),
+        );
+        let folded = compiler.constant_fold(&expr);
+        assert_eq!(folded, Expr::Literal(ScalarValue::Int64(24)));
+
+        // Test constant folding for comparison
+        let expr = Expr::binary(
+            Expr::Literal(ScalarValue::Int64(10)),
+            Operator::Gt,
+            Expr::Literal(ScalarValue::Int64(5)),
+        );
+        let folded = compiler.constant_fold(&expr);
+        assert_eq!(folded, Expr::Literal(ScalarValue::Boolean(true)));
+
+        // Test that expressions with variables are not folded
+        let expr = Expr::binary(
+            Expr::Column("a".to_string()),
+            Operator::Add,
+            Expr::Literal(ScalarValue::Int64(1)),
+        );
+        let folded = compiler.constant_fold(&expr);
+        match folded {
+            Expr::Binary { left, op, right } => {
+                assert_eq!(*left, Expr::Column("a".to_string()));
+                assert_eq!(op, Operator::Add);
+                assert_eq!(*right, Expr::Literal(ScalarValue::Int64(1)));
+            }
+            _ => panic!("Expected binary expression"),
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_unary_operations() {
+        let compiler = ExpressionCompiler::new();
+
+        // Test constant folding for negation
+        let expr = Expr::unary(UnaryOp::Neg, Expr::Literal(ScalarValue::Int64(5)));
+        let folded = compiler.constant_fold(&expr);
+        assert_eq!(folded, Expr::Literal(ScalarValue::Int64(-5)));
+
+        // Test constant folding for boolean NOT
+        let expr = Expr::unary(UnaryOp::Not, Expr::Literal(ScalarValue::Boolean(true)));
+        let folded = compiler.constant_fold(&expr);
+        assert_eq!(folded, Expr::Literal(ScalarValue::Boolean(false)));
+    }
+
+    #[test]
+    fn test_constant_folding_functions() {
+        let compiler = ExpressionCompiler::new();
+
+        // Test constant folding for abs function
+        let expr = Expr::function(
+            "abs".to_string(),
+            vec![Expr::Literal(ScalarValue::Int64(-5))],
+        );
+        let folded = compiler.constant_fold(&expr);
+        assert_eq!(folded, Expr::Literal(ScalarValue::Int64(5)));
+
+        // Test constant folding for length function
+        let expr = Expr::function(
+            "length".to_string(),
+            vec![Expr::Literal(ScalarValue::Utf8("hello".to_string()))],
+        );
+        let folded = compiler.constant_fold(&expr);
+        assert_eq!(folded, Expr::Literal(ScalarValue::Int64(5)));
+    }
+
+    #[test]
+    fn test_constant_folding_nested_expressions() {
+        let compiler = ExpressionCompiler::new();
+
+        // Test nested constant folding: (2 + 3) * 4
+        let inner = Expr::binary(
+            Expr::Literal(ScalarValue::Int64(2)),
+            Operator::Add,
+            Expr::Literal(ScalarValue::Int64(3)),
+        );
+        let expr = Expr::binary(inner, Operator::Mul, Expr::Literal(ScalarValue::Int64(4)));
+        let folded = compiler.constant_fold(&expr);
+        assert_eq!(folded, Expr::Literal(ScalarValue::Int64(20)));
+    }
+
+    #[test]
+    fn test_constant_folding_disabled() {
+        let compiler = ExpressionCompiler::new().with_constant_folding(false);
+
+        let expr = Expr::binary(
+            Expr::Literal(ScalarValue::Int64(5)),
+            Operator::Add,
+            Expr::Literal(ScalarValue::Int64(3)),
+        );
+        let folded = compiler.constant_fold(&expr);
+        // Should remain unchanged when constant folding is disabled
+        match folded {
+            Expr::Binary { left, op, right } => {
+                assert_eq!(*left, Expr::Literal(ScalarValue::Int64(5)));
+                assert_eq!(op, Operator::Add);
+                assert_eq!(*right, Expr::Literal(ScalarValue::Int64(3)));
+            }
+            _ => panic!("Expected binary expression"),
+        }
     }
 
     #[test]
