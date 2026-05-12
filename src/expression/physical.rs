@@ -547,7 +547,6 @@ impl PhysicalExpr for BinaryExpr {
                             actual: format!("{:?} - {:?}", left_array.data_type(), right_array.data_type()),
                         });
                     }
-                    }
                 }
             }
             Operator::Mul => {
@@ -651,64 +650,9 @@ impl PhysicalExpr for BinaryExpr {
                 }
             }
             Operator::Div => {
-                match (left_array.data_type(), right_array.data_type()) {
-                            });
-                        };
-                        Arc::new(result) as Arc<dyn arrow::array::Array>
-                    }
-                    (arrow::datatypes::DataType::Float64, arrow::datatypes::DataType::Float64) => {
-                        let left_floats = left_array.as_any().downcast_ref::<Float64Array>().unwrap();
-                        let right_floats = right_array.as_any().downcast_ref::<Float64Array>().unwrap();
-                        
-                        let result = if left_floats.len() == right_floats.len() {
-                            // Use manual division for compatibility
-                            let len = left_floats.len();
-                            let mut result = Vec::with_capacity(len);
-                            
-                            for i in 0..len {
-                                let left_val = left_floats.value(i);
-                                let right_val = right_floats.value(i);
-                                result.push(left_val / right_val);
-                            }
-                            
-                            Arc::new(Float64Array::from(result)) as Arc<dyn arrow::array::Array>
-                        } else if left_floats.len() == 1 && right_floats.len() > 1 {
-                            // Broadcast left scalar
-                            let left_val = left_floats.value(0);
-                            let len = right_floats.len();
-                            let mut result = Vec::with_capacity(len);
-                            
-                            for i in 0..len {
-                                result.push(left_val / right_floats.value(i));
-                            }
-                            
-                            Arc::new(Float64Array::from(result)) as Arc<dyn arrow::array::Array>
-                        } else if right_floats.len() == 1 && left_floats.len() > 1 {
-                            // Broadcast right scalar
-                            let right_val = right_floats.value(0);
-                            let len = left_floats.len();
-                            let mut result = Vec::with_capacity(len);
-                            
-                            for i in 0..len {
-                                result.push(left_floats.value(i) / right_val);
-                            }
-                            
-                            Arc::new(Float64Array::from(result)) as Arc<dyn arrow::array::Array>
-                        } else {
-                            return Err(ExpressionError::InvalidOperation {
-                                op: "divide".to_string(),
-                                left_type: "Float64".to_string(),
-                                right_type: "Float64".to_string(),
-                            });
-                        };
-                        Arc::new(result) as Arc<dyn arrow::array::Array>
-                    }
-                    _ => {
-                        return Err(ExpressionError::TypeMismatch {
-                            expected: "Int64 or Float64".to_string(),
-                            actual: format!("{:?} / {:?}", left_array.data_type(), right_array.data_type()),
-                        });
-                    }
+                match crate::expression::ArithmeticOps::divide(&left_array, &right_array) {
+                    Ok(result) => result,
+                    Err(e) => return Err(e.into()),
                 }
             }
 

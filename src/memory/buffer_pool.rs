@@ -46,22 +46,23 @@ impl BufferPool {
     /// Get an array from the pool with LRU eviction and memory pressure detection
     pub fn get_array(&self, dtype: &DataType, capacity: usize) -> ArrayRef {
         let mut pools = self.pools.lock().unwrap();
-        let pool = pools.entry(dtype.clone()).or_default();
-
+        
         // Check memory pressure and cleanup if needed
         self.check_memory_pressure(&mut pools);
+        
+        let pool = pools.entry(dtype.clone()).or_default();
 
         // Try to find a suitable buffer using LRU
         if let Some(idx) = pool.iter().position(|arr| arr.len() >= capacity) {
             let array = pool.remove(idx).unwrap();
             // Move to back (most recently used)
-            pool.push_back(array);
+            pool.push_back(array.clone());
             array
         } else {
             // Create a new array and track memory
             let array = self.create_array(dtype, capacity);
             self.track_memory_usage(&array);
-            pool.push_back(array);
+            pool.push_back(array.clone());
             
             // Enforce pool size limit
             if pool.len() > self.max_size_per_pool {
@@ -109,7 +110,7 @@ impl BufferPool {
         let pool = pools.entry(dtype).or_default();
 
         // Add to back (most recently used)
-        pool.push_back(array);
+        pool.push_back(array.clone());
         
         // Enforce pool size limit
         if pool.len() > self.max_size_per_pool {
