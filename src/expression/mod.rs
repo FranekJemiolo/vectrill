@@ -13,5 +13,8 @@ pub use ir::{Expr, ExprType, TypedExpr};
 pub use operators::{
     map_python_bool_op, map_python_operator, map_python_unary_op, Operator, UnaryOp,
 };
-pub use physical::{create_physical_expr, PhysicalExpr};
+pub use physical::{
+    create_physical_expr, PhysicalExpr, ExpressionCache, ExpressionCounters, ExpressionStats,
+    global_expression_cache, global_expression_counters,
+};
 pub use scalar_value::ScalarValue;

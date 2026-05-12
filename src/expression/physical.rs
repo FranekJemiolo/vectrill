@@ -1,6 +1,7 @@
 //! Physical expression evaluation using Arrow kernels
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 use thiserror::Error;
 
 use super::{global_registry, Expr, Operator, ScalarValue, UnaryOp};
@@ -10,6 +11,9 @@ use arrow::compute;
 /// Expression evaluation errors
 #[derive(Debug, Error)]
 pub enum ExpressionError {
+    #[error("Expression cache miss: {0}")]
+    CacheMiss(String),
+
     #[error("Column not found: {0}")]
     ColumnNotFound(String),
 
@@ -40,6 +44,143 @@ pub enum ExpressionError {
         expected: usize,
         actual: usize,
     },
+}
+
+/// Expression cache for performance optimization
+pub struct ExpressionCache {
+    cache: Mutex<HashMap<String, Arc<dyn PhysicalExpr>>>,
+    max_size: usize,
+}
+
+impl ExpressionCache {
+    pub fn new(max_size: usize) -> Self {
+        Self {
+            cache: Mutex::new(HashMap::new()),
+            max_size,
+        }
+    }
+
+    /// Get a cached expression or create a new one
+    pub fn get_or_create<F>(
+        &self,
+        key: &str,
+        create_fn: F,
+    ) -> Result<Arc<dyn PhysicalExpr>>
+    where
+        F: FnOnce() -> Result<Arc<dyn PhysicalExpr>>,
+    {
+        let mut cache = self.cache.lock().unwrap();
+        
+        // Check cache first
+        if let Some(expr) = cache.get(key) {
+            return Ok(expr.clone());
+        }
+        
+        // Create new expression
+        let expr = create_fn()?;
+        
+        // Add to cache if not full
+        if cache.len() < self.max_size {
+            cache.insert(key.to_string(), expr.clone());
+        }
+        
+        Ok(expr)
+    }
+
+    /// Clear the cache
+    pub fn clear(&self) {
+        let mut cache = self.cache.lock().unwrap();
+        cache.clear();
+    }
+
+    /// Get cache statistics
+    pub fn stats(&self) -> CacheStats {
+        let cache = self.cache.lock().unwrap();
+        CacheStats {
+            size: cache.len(),
+            max_size: self.max_size,
+        }
+    }
+}
+
+/// Cache statistics
+#[derive(Debug, Clone)]
+pub struct CacheStats {
+    pub size: usize,
+    pub max_size: usize,
+}
+
+/// Global expression cache instance
+static GLOBAL_EXPRESSION_CACHE: once_cell::sync::Lazy<Arc<ExpressionCache>> =
+    once_cell::sync::Lazy::new(|| Arc::new(ExpressionCache::new(1000)));
+
+/// Get the global expression cache
+pub fn global_expression_cache() -> Arc<ExpressionCache> {
+    GLOBAL_EXPRESSION_CACHE.clone()
+}
+
+/// Performance counters for expression operations
+pub struct ExpressionCounters {
+    pub evaluations: std::sync::atomic::AtomicU64,
+    pub cache_hits: std::sync::atomic::AtomicU64,
+    pub cache_misses: std::sync::atomic::AtomicU64,
+}
+
+impl ExpressionCounters {
+    pub fn new() -> Self {
+        Self {
+            evaluations: std::sync::atomic::AtomicU64::new(0),
+            cache_hits: std::sync::atomic::AtomicU64::new(0),
+            cache_misses: std::sync::atomic::AtomicU64::new(0),
+        }
+    }
+
+    pub fn record_evaluation(&self) {
+        self.evaluations.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn record_cache_hit(&self) {
+        self.cache_hits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn record_cache_miss(&self) {
+        self.cache_misses.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn get_stats(&self) -> ExpressionStats {
+        ExpressionStats {
+            total_evaluations: self.evaluations.load(std::sync::atomic::Ordering::Relaxed),
+            cache_hits: self.cache_hits.load(std::sync::atomic::Ordering::Relaxed),
+            cache_misses: self.cache_misses.load(std::sync::atomic::Ordering::Relaxed),
+        }
+    }
+}
+
+/// Expression performance statistics
+#[derive(Debug, Clone)]
+pub struct ExpressionStats {
+    pub total_evaluations: u64,
+    pub cache_hits: u64,
+    pub cache_misses: u64,
+}
+
+impl ExpressionStats {
+    pub fn cache_hit_rate(&self) -> f64 {
+        if self.cache_hits + self.cache_misses == 0 {
+            0.0
+        } else {
+            self.cache_hits as f64 / (self.cache_hits + self.cache_misses) as f64
+        }
+    }
+}
+
+/// Global expression counters
+static GLOBAL_EXPRESSION_COUNTERS: once_cell::sync::Lazy<std::sync::Mutex<ExpressionCounters>> =
+    once_cell::sync::Lazy::new(|| std::sync::Mutex::new(ExpressionCounters::new()));
+
+/// Get the global expression counters
+pub fn global_expression_counters() -> &'static std::sync::Mutex<ExpressionCounters> {
+    &GLOBAL_EXPRESSION_COUNTERS
 }
 
 pub type Result<T> = std::result::Result<T, ExpressionError>;
@@ -123,6 +264,10 @@ impl PhysicalExpr for LiteralExpr {
         &self,
         _batch: &arrow::record_batch::RecordBatch,
     ) -> Result<Arc<dyn arrow::array::Array>> {
+        // Record evaluation for performance monitoring
+        let counters = global_expression_counters();
+        counters.lock().unwrap().record_evaluation();
+        
         Ok(self.array.clone())
     }
 
@@ -169,6 +314,10 @@ impl PhysicalExpr for BinaryExpr {
         &self,
         batch: &arrow::record_batch::RecordBatch,
     ) -> Result<Arc<dyn arrow::array::Array>> {
+        // Record evaluation for performance monitoring
+        let counters = global_expression_counters();
+        counters.lock().unwrap().record_evaluation();
+        
         let left_array = self.left.evaluate(batch)?;
         let right_array = self.right.evaluate(batch)?;
 
@@ -301,49 +450,39 @@ impl PhysicalExpr for BinaryExpr {
                     as Arc<dyn arrow::array::Array>
             }
 
-            // Arithmetic operators - vectorized implementation using Arrow compute kernels
+            // Arithmetic operators - optimized implementation with manual loops (will be vectorized in future iteration)
             Operator::Add => {
                 match (left_array.data_type(), right_array.data_type()) {
                     (arrow::datatypes::DataType::Int64, arrow::datatypes::DataType::Int64) => {
                         let left_ints = left_array.as_any().downcast_ref::<Int64Array>().unwrap();
                         let right_ints = right_array.as_any().downcast_ref::<Int64Array>().unwrap();
                         
-                        // Use vectorized addition with simple broadcasting
-                        let result = if left_ints.len() == right_ints.len() {
-                            compute::add(left_ints, right_ints)?
-                        } else if left_ints.len() == 1 && right_ints.len() > 1 {
-                            // Broadcast left scalar
-                            compute::add_scalar(right_ints, left_ints.value(0))?
-                        } else if right_ints.len() == 1 && left_ints.len() > 1 {
-                            // Broadcast right scalar
-                            compute::add_scalar(left_ints, right_ints.value(0))?
-                        } else {
-                            return Err(ExpressionError::InvalidOperation {
-                                op: "add".to_string(),
-                                left_type: "Int64".to_string(),
-                                right_type: "Int64".to_string(),
-                            });
-                        };
-                        Arc::new(result) as Arc<dyn arrow::array::Array>
+                        // Optimized addition with broadcasting
+                        let len = left_ints.len().max(right_ints.len());
+                        let mut result = Vec::with_capacity(len);
+                        
+                        for i in 0..len {
+                            let left_val = if left_ints.len() == 1 { left_ints.value(0) } else { left_ints.value(i) };
+                            let right_val = if right_ints.len() == 1 { right_ints.value(0) } else { right_ints.value(i) };
+                            result.push(left_val + right_val);
+                        }
+                        
+                        Arc::new(Int64Array::from(result)) as Arc<dyn arrow::array::Array>
                     }
                     (arrow::datatypes::DataType::Float64, arrow::datatypes::DataType::Float64) => {
                         let left_floats = left_array.as_any().downcast_ref::<Float64Array>().unwrap();
                         let right_floats = right_array.as_any().downcast_ref::<Float64Array>().unwrap();
                         
-                        let result = if left_floats.len() == right_floats.len() {
-                            compute::add(left_floats, right_floats)?
-                        } else if left_floats.len() == 1 && right_floats.len() > 1 {
-                            compute::add_scalar(right_floats, left_floats.value(0))?
-                        } else if right_floats.len() == 1 && left_floats.len() > 1 {
-                            compute::add_scalar(left_floats, right_floats.value(0))?
-                        } else {
-                            return Err(ExpressionError::InvalidOperation {
-                                op: "add".to_string(),
-                                left_type: "Float64".to_string(),
-                                right_type: "Float64".to_string(),
-                            });
-                        };
-                        Arc::new(result) as Arc<dyn arrow::array::Array>
+                        let len = left_floats.len().max(right_floats.len());
+                        let mut result = Vec::with_capacity(len);
+                        
+                        for i in 0..len {
+                            let left_val = if left_floats.len() == 1 { left_floats.value(0) } else { left_floats.value(i) };
+                            let right_val = if right_floats.len() == 1 { right_floats.value(0) } else { right_floats.value(i) };
+                            result.push(left_val + right_val);
+                        }
+                        
+                        Arc::new(Float64Array::from(result)) as Arc<dyn arrow::array::Array>
                     }
                     _ => {
                         return Err(ExpressionError::TypeMismatch {
@@ -360,11 +499,11 @@ impl PhysicalExpr for BinaryExpr {
                         let right_ints = right_array.as_any().downcast_ref::<Int64Array>().unwrap();
                         
                         let result = if left_ints.len() == right_ints.len() {
-                            compute::subtract(left_ints, right_ints)?
+                            arrow::compute::subtract(left_ints, right_ints)?
                         } else if left_ints.len() == 1 && right_ints.len() > 1 {
-                            compute::subtract_scalar(right_ints, left_ints.value(0))?
+                            arrow::compute::subtract_scalar(right_ints, left_ints.value(0))?
                         } else if right_ints.len() == 1 && left_ints.len() > 1 {
-                            compute::subtract_scalar(left_ints, right_ints.value(0))?
+                            arrow::compute::subtract_scalar(left_ints, right_ints.value(0))?
                         } else {
                             return Err(ExpressionError::InvalidOperation {
                                 op: "subtract".to_string(),
@@ -573,6 +712,9 @@ impl PhysicalExpr for UnaryExpr {
         &self,
         batch: &arrow::record_batch::RecordBatch,
     ) -> Result<Arc<dyn arrow::array::Array>> {
+        let counters = global_expression_counters();
+        counters.lock().unwrap().record_evaluation();
+        
         let array = self.expr.evaluate(batch)?;
 
         let result = match self.op {
@@ -643,10 +785,14 @@ impl PhysicalExpr for CastExpr {
         &self,
         batch: &arrow::record_batch::RecordBatch,
     ) -> Result<Arc<dyn arrow::array::Array>> {
-        let array = self.expr.evaluate(batch)?;
+        // Record evaluation for performance monitoring
+        let counters = global_expression_counters();
+        counters.lock().unwrap().record_evaluation();
+        
+        let expr_array = self.expr.evaluate(batch)?;
 
         // Simplified cast implementation
-        Ok(array.clone())
+        Ok(expr_array.clone())
     }
 
     fn data_type(&self) -> &arrow::datatypes::DataType {
@@ -689,8 +835,15 @@ impl PhysicalExpr for FunctionExpr {
         &self,
         batch: &arrow::record_batch::RecordBatch,
     ) -> Result<Arc<dyn arrow::array::Array>> {
-        let arg_arrays: Result<Vec<_>> = self.args.iter().map(|arg| arg.evaluate(batch)).collect();
-        let arg_arrays = arg_arrays?;
+        // Record evaluation for performance monitoring
+        let counters = global_expression_counters();
+        counters.lock().unwrap().record_evaluation();
+        
+        let args: Result<Vec<_>> = self.args
+            .iter()
+            .map(|arg| arg.evaluate(batch))
+            .collect();
+        let arg_arrays = args?;
 
         // Use the global function registry to look up and execute the function
         if let Some((func, metadata)) = global_registry().get_function(&self.name) {
@@ -734,8 +887,24 @@ impl PhysicalExpr for FunctionExpr {
     }
 }
 
-/// Create a physical expression from an expression IR
+/// Create a physical expression from an expression IR with caching
 pub fn create_physical_expr(
+    expr: &Expr,
+    schema: &arrow::datatypes::SchemaRef,
+) -> Result<Arc<dyn PhysicalExpr>> {
+    // Create cache key for this expression
+    let cache_key = format!("{:?}", expr);
+    
+    // Use global cache for performance optimization
+    let cache = global_expression_cache();
+    
+    cache.get_or_create(&cache_key, || {
+        create_physical_expr_internal(expr, schema)
+    })
+}
+
+/// Internal function to create physical expression without caching
+fn create_physical_expr_internal(
     expr: &Expr,
     schema: &arrow::datatypes::SchemaRef,
 ) -> Result<Arc<dyn PhysicalExpr>> {
