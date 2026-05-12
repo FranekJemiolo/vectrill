@@ -314,7 +314,9 @@ impl ExpressionCompiler {
                 }
 
                 // Apply algebraic simplifications
-                if let Some(simplified) = self.simplify_binary_expression(*op, &folded_left, &folded_right) {
+                if let Some(simplified) =
+                    self.simplify_binary_expression(*op, &folded_left, &folded_right)
+                {
                     return simplified;
                 }
 
@@ -540,45 +542,67 @@ impl ExpressionCompiler {
             // Addition simplifications
             Operator::Add => {
                 // x + 0 = x
-                if let Expr::Literal(ScalarValue::Int64(0)) | Expr::Literal(ScalarValue::Float64(0.0)) = right {
+                if let Expr::Literal(ScalarValue::Int64(0))
+                | Expr::Literal(ScalarValue::Float64(0.0)) = right
+                {
                     return Some(left.clone());
                 }
-                if let Expr::Literal(ScalarValue::Int64(0)) | Expr::Literal(ScalarValue::Float64(0.0)) = left {
+                if let Expr::Literal(ScalarValue::Int64(0))
+                | Expr::Literal(ScalarValue::Float64(0.0)) = left
+                {
                     return Some(right.clone());
                 }
                 // x + (-y) = x - y
-                if let Expr::Unary { op: UnaryOp::Neg, expr } = right {
+                if let Expr::Unary {
+                    op: UnaryOp::Neg,
+                    expr,
+                } = right
+                {
                     return Some(Expr::binary(left.clone(), Operator::Sub, *expr.clone()));
                 }
             }
             // Multiplication simplifications
             Operator::Mul => {
                 // x * 1 = x
-                if let Expr::Literal(ScalarValue::Int64(1)) | Expr::Literal(ScalarValue::Float64(1.0)) = right {
+                if let Expr::Literal(ScalarValue::Int64(1))
+                | Expr::Literal(ScalarValue::Float64(1.0)) = right
+                {
                     return Some(left.clone());
                 }
-                if let Expr::Literal(ScalarValue::Int64(1)) | Expr::Literal(ScalarValue::Float64(1.0)) = left {
+                if let Expr::Literal(ScalarValue::Int64(1))
+                | Expr::Literal(ScalarValue::Float64(1.0)) = left
+                {
                     return Some(right.clone());
                 }
                 // x * 0 = 0
-                if let Expr::Literal(ScalarValue::Int64(0)) | Expr::Literal(ScalarValue::Float64(0.0)) = right {
+                if let Expr::Literal(ScalarValue::Int64(0))
+                | Expr::Literal(ScalarValue::Float64(0.0)) = right
+                {
                     return Some(right.clone());
                 }
-                if let Expr::Literal(ScalarValue::Int64(0)) | Expr::Literal(ScalarValue::Float64(0.0)) = left {
+                if let Expr::Literal(ScalarValue::Int64(0))
+                | Expr::Literal(ScalarValue::Float64(0.0)) = left
+                {
                     return Some(left.clone());
                 }
             }
             // Subtraction simplifications
             Operator::Sub => {
                 // x - 0 = x
-                if let Expr::Literal(ScalarValue::Int64(0)) | Expr::Literal(ScalarValue::Float64(0.0)) = right {
+                if let Expr::Literal(ScalarValue::Int64(0))
+                | Expr::Literal(ScalarValue::Float64(0.0)) = right
+                {
                     return Some(left.clone());
                 }
                 // x - x = 0
                 if left == right {
                     return match left {
-                        Expr::Literal(ScalarValue::Int64(_)) => Some(Expr::Literal(ScalarValue::Int64(0))),
-                        Expr::Literal(ScalarValue::Float64(_)) => Some(Expr::Literal(ScalarValue::Float64(0.0))),
+                        Expr::Literal(ScalarValue::Int64(_)) => {
+                            Some(Expr::Literal(ScalarValue::Int64(0)))
+                        }
+                        Expr::Literal(ScalarValue::Float64(_)) => {
+                            Some(Expr::Literal(ScalarValue::Float64(0.0)))
+                        }
                         _ => None,
                     };
                 }
@@ -586,11 +610,15 @@ impl ExpressionCompiler {
             // Division simplifications
             Operator::Div => {
                 // x / 1 = x
-                if let Expr::Literal(ScalarValue::Int64(1)) | Expr::Literal(ScalarValue::Float64(1.0)) = right {
+                if let Expr::Literal(ScalarValue::Int64(1))
+                | Expr::Literal(ScalarValue::Float64(1.0)) = right
+                {
                     return Some(left.clone());
                 }
                 // 0 / x = 0 (if x != 0)
-                if let Expr::Literal(ScalarValue::Int64(0)) | Expr::Literal(ScalarValue::Float64(0.0)) = left {
+                if let Expr::Literal(ScalarValue::Int64(0))
+                | Expr::Literal(ScalarValue::Float64(0.0)) = left
+                {
                     if let Expr::Literal(val) = right {
                         if !self.is_zero_value(val) {
                             return Some(left.clone());
@@ -617,17 +645,27 @@ impl ExpressionCompiler {
         match op {
             UnaryOp::Neg => {
                 // -(-x) = x
-                if let Expr::Unary { op: UnaryOp::Neg, expr } = expr {
+                if let Expr::Unary {
+                    op: UnaryOp::Neg,
+                    expr,
+                } = expr
+                {
                     return Some(*expr.clone());
                 }
                 // -(0) = 0
-                if let Expr::Literal(ScalarValue::Int64(0)) | Expr::Literal(ScalarValue::Float64(0.0)) = expr {
+                if let Expr::Literal(ScalarValue::Int64(0))
+                | Expr::Literal(ScalarValue::Float64(0.0)) = expr
+                {
                     return Some(expr.clone());
                 }
             }
             UnaryOp::Not => {
                 // !(!x) = x (for boolean expressions)
-                if let Expr::Unary { op: UnaryOp::Not, expr } = expr {
+                if let Expr::Unary {
+                    op: UnaryOp::Not,
+                    expr,
+                } = expr
+                {
                     return Some(*expr.clone());
                 }
             }
@@ -642,7 +680,11 @@ impl ExpressionCompiler {
             "abs" => {
                 if args.len() == 1 {
                     // abs(abs(x)) = abs(x)
-                    if let Expr::Function { name: inner_name, args: inner_args } = &args[0] {
+                    if let Expr::Function {
+                        name: inner_name,
+                        args: inner_args,
+                    } = &args[0]
+                    {
                         if inner_name == "abs" {
                             return Some(args[0].clone());
                         }
@@ -1286,12 +1328,18 @@ mod tests {
         }
 
         // Test abs(0) = 0
-        let expr = Expr::function("abs".to_string(), vec![Expr::Literal(ScalarValue::Int64(0))]);
+        let expr = Expr::function(
+            "abs".to_string(),
+            vec![Expr::Literal(ScalarValue::Int64(0))],
+        );
         let folded = compiler.constant_fold(&expr);
         assert_eq!(folded, Expr::Literal(ScalarValue::Int64(0)));
 
         // Test length("") = 0
-        let expr = Expr::function("length".to_string(), vec![Expr::Literal(ScalarValue::Utf8("".to_string()))]);
+        let expr = Expr::function(
+            "length".to_string(),
+            vec![Expr::Literal(ScalarValue::Utf8("".to_string()))],
+        );
         let folded = compiler.constant_fold(&expr);
         assert_eq!(folded, Expr::Literal(ScalarValue::Int64(0)));
     }
@@ -1333,7 +1381,7 @@ mod tests {
             ),
         );
         let folded = compiler.constant_fold(&expr);
-        
+
         // Should simplify to x - 0 = x
         if let Expr::Binary { left, op, right } = folded {
             assert_eq!(*left, Expr::Column("x".to_string()));
@@ -1347,7 +1395,7 @@ mod tests {
     #[test]
     fn test_constant_folding_performance() {
         let compiler = ExpressionCompiler::new();
-        
+
         // Create a deeply nested constant expression
         let expr = Expr::binary(
             Expr::binary(
@@ -1362,7 +1410,7 @@ mod tests {
                 Expr::Literal(ScalarValue::Int64(1)),
             ),
         );
-        
+
         let folded = compiler.constant_fold(&expr);
         // Should fold to a single constant: (2+3) * (4-1) = 5 * 3 = 15
         assert_eq!(folded, Expr::Literal(ScalarValue::Int64(15)));

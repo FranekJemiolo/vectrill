@@ -4,6 +4,8 @@ use crate::error::Result;
 use crate::expression::Expr;
 use crate::planner::physical::PhysicalPlan;
 use crate::RecordBatch;
+use std::collections::HashSet;
+use std::sync::Arc;
 
 /// Trait for operators that can be fused together
 pub trait FusableOperator {
@@ -86,6 +88,204 @@ impl FusedOperator {
             projection,
         }
     }
+
+    /// Create a fused operator from multiple operators
+    pub fn from_operators(operators: Vec<Box<dyn FusableOperator>>) -> Result<Self> {
+        let mut all_expressions = Vec::new();
+        let mut combined_predicate: Option<Expr> = None;
+        let mut combined_projection = Vec::new();
+        let mut expr_id_counter = 0;
+
+        for operator in operators {
+            // Collect expressions from this operator
+            for expr in operator.expressions() {
+                let fused_expr = FusedExpr {
+                    expr: expr.clone(),
+                    id: expr_id_counter,
+                    dependencies: Self::extract_dependencies(expr),
+                };
+                all_expressions.push(fused_expr);
+                expr_id_counter += 1;
+            }
+
+            // Combine predicates with AND
+            if let Some(pred) = operator.predicate() {
+                if let Some(existing_pred) = &combined_predicate {
+                    combined_predicate = Some(Expr::binary(
+                        existing_pred.clone(),
+                        crate::expression::operators::Operator::And,
+                        pred.clone(),
+                    ));
+                } else {
+                    combined_predicate = Some(pred.clone());
+                }
+            }
+
+            // Combine projections (union of all projections)
+            if let Some(projection) = operator.projection() {
+                for col_name in projection {
+                    if !combined_projection.contains(col_name) {
+                        combined_projection.push(col_name.clone());
+                    }
+                }
+            }
+        }
+
+        // Sort expressions by dependencies (topological sort)
+        let sorted_expressions = Self::topological_sort(all_expressions)?;
+
+        Ok(Self {
+            expressions: sorted_expressions,
+            predicate: combined_predicate,
+            projection: combined_projection,
+        })
+    }
+
+    /// Extract dependencies from an expression
+    fn extract_dependencies(expr: &Expr) -> Vec<usize> {
+        use crate::expression::Expr::*;
+
+        match expr {
+            Column(_) => Vec::new(),
+            Literal(_) => Vec::new(),
+            Binary { left, right, .. } => {
+                let mut deps = Self::extract_dependencies(left);
+                deps.extend(Self::extract_dependencies(right));
+                deps
+            }
+            Unary { expr, .. } => Self::extract_dependencies(expr),
+            Function { args, .. } => {
+                let mut deps = Vec::new();
+                for arg in args {
+                    deps.extend(Self::extract_dependencies(arg));
+                }
+                deps
+            }
+            Cast { expr, .. } => Self::extract_dependencies(expr),
+        }
+    }
+
+    /// Topological sort expressions by dependencies
+    fn topological_sort(expressions: Vec<FusedExpr>) -> Result<Vec<FusedExpr>> {
+        use std::collections::HashMap;
+
+        let mut in_degree: HashMap<usize, usize> = HashMap::new();
+        let mut adj_list: HashMap<usize, Vec<usize>> = HashMap::new();
+        let mut expr_map: HashMap<usize, FusedExpr> = HashMap::new();
+
+        // Initialize structures
+        for expr in &expressions {
+            in_degree.insert(expr.id, 0);
+            adj_list.insert(expr.id, Vec::new());
+            expr_map.insert(expr.id, expr.clone());
+        }
+
+        // Build dependency graph
+        for expr in &expressions {
+            for &dep_id in &expr.dependencies {
+                if let Some(deps) = adj_list.get_mut(&dep_id) {
+                    deps.push(expr.id);
+                }
+                *in_degree.entry(expr.id).or_insert(0) += 1;
+            }
+        }
+
+        // Topological sort using Kahn's algorithm
+        let mut queue: Vec<usize> = in_degree
+            .iter()
+            .filter(|(_, &degree)| degree == 0)
+            .map(|(&id, _)| id)
+            .collect();
+
+        let mut result = Vec::new();
+
+        while let Some(current) = queue.pop() {
+            if let Some(expr) = expr_map.remove(&current) {
+                result.push(expr);
+            }
+
+            if let Some(dependents) = adj_list.remove(&current) {
+                for &dep_id in &dependents {
+                    if let Some(degree) = in_degree.get_mut(&dep_id) {
+                        *degree -= 1;
+                        if *degree == 0 {
+                            queue.push(dep_id);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check for cycles
+        if result.len() != expressions.len() {
+            return Err(crate::error::VectrillError::InvalidExpression(
+                "Circular dependency detected in expressions".to_string(),
+            ));
+        }
+
+        Ok(result)
+    }
+
+    /// Optimize the fused operator by removing unused expressions
+    pub fn optimize(&mut self) -> Result<()> {
+        use std::collections::HashSet;
+
+        // Find all used expressions
+        let mut used = HashSet::new();
+
+        // Mark expressions used in predicate
+        if let Some(pred) = &self.predicate {
+            Self::mark_used(pred, &mut used);
+        }
+
+        // Mark expressions used in projection
+        for col_name in &self.projection {
+            // This is simplified - in practice, we'd need to track which expressions
+            // produce which columns
+            for expr in &self.expressions {
+                if Self::expr_produces_column(expr, col_name) {
+                    Self::mark_used(&expr.expr, &mut used);
+                }
+            }
+        }
+
+        // Remove unused expressions
+        self.expressions.retain(|expr| used.contains(&expr.id));
+
+        // Re-sort expressions by dependencies
+        self.expressions = Self::topological_sort(self.expressions.clone())?;
+
+        Ok(())
+    }
+
+    /// Mark all expressions used by a given expression
+    fn mark_used(expr: &Expr, used: &mut HashSet<usize>) {
+        match expr {
+            Expr::Binary { left, right, .. } => {
+                Self::mark_used(left, used);
+                Self::mark_used(right, used);
+            }
+            Expr::Unary { expr, .. } => {
+                Self::mark_used(expr, used);
+            }
+            Expr::Function { args, .. } => {
+                for arg in args {
+                    Self::mark_used(arg, used);
+                }
+            }
+            Expr::Cast { expr, .. } => {
+                Self::mark_used(expr, used);
+            }
+            _ => {}
+        }
+    }
+
+    /// Check if an expression produces a specific column (simplified)
+    fn expr_produces_column(_expr: &FusedExpr, _col_name: &str) -> bool {
+        // This is a simplified implementation
+        // In practice, we'd need to track expression-to-column mappings
+        true
+    }
 }
 
 impl crate::operators::pipeline::Operator for FusedOperator {
@@ -108,16 +308,111 @@ impl crate::operators::pipeline::Operator for FusedOperator {
 impl FusedOperator {
     /// Evaluate all expressions in dependency order
     fn eval_all(&self, batch: &RecordBatch) -> Result<RecordBatch> {
-        // For now, return the batch unchanged
-        // TODO: Implement actual expression evaluation with dependency ordering
-        Ok(batch.clone())
+        use crate::expression::physical::create_physical_expr;
+        use arrow::array::ArrayRef;
+        use std::collections::HashMap;
+
+        let mut computed_values: HashMap<usize, ArrayRef> = HashMap::new();
+        let mut result_columns: Vec<arrow::datatypes::Field> = batch
+            .schema()
+            .fields()
+            .iter()
+            .map(|f| f.as_ref().clone())
+            .collect();
+        let mut result_arrays: Vec<ArrayRef> = batch.columns().to_vec();
+
+        // Evaluate expressions in dependency order
+        for fused_expr in &self.expressions {
+            // Evaluate dependencies first
+            let mut dependency_arrays: Vec<ArrayRef> = Vec::new();
+            for &dep_id in &fused_expr.dependencies {
+                if let Some(dep_array) = computed_values.get(&dep_id) {
+                    dependency_arrays.push(dep_array.clone());
+                } else {
+                    // This should be a column from the original batch
+                    let col_name = format!("col_{}", dep_id);
+                    if let Some(col_array) = batch.column_by_name(&col_name) {
+                        dependency_arrays.push(col_array.clone());
+                    } else {
+                        return Err(crate::error::VectrillError::InvalidExpression(format!(
+                            "Dependency not found: {}",
+                            dep_id
+                        )));
+                    }
+                }
+            }
+
+            // Create a temporary batch with dependency columns
+            let temp_schema = arrow::datatypes::Schema::new(
+                fused_expr
+                    .dependencies
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &dep_id)| {
+                        let name = format!("dep_{}", i);
+                        let data_type = dependency_arrays[i].data_type().clone();
+                        arrow::datatypes::Field::new(name, data_type, true)
+                    })
+                    .collect::<Vec<_>>(),
+            );
+
+            let temp_batch = RecordBatch::try_new(Arc::new(temp_schema), dependency_arrays)?;
+
+            // Evaluate the expression
+            let physical_expr = create_physical_expr(&fused_expr.expr, &temp_batch.schema())?;
+            let result_array = physical_expr.evaluate(&temp_batch)?;
+
+            // Store the computed value
+            computed_values.insert(fused_expr.id, result_array.clone());
+
+            // Add to result columns
+            let col_name = format!("expr_{}", fused_expr.id);
+            result_columns.push(arrow::datatypes::Field::new(
+                col_name.clone(),
+                result_array.data_type().clone(),
+                true,
+            ));
+            result_arrays.push(result_array);
+        }
+
+        // Create the result batch
+        let result_schema = arrow::datatypes::Schema::new(result_columns);
+        Ok(RecordBatch::try_new(
+            Arc::new(result_schema),
+            result_arrays,
+        )?)
     }
 
     /// Apply predicate to filter rows
-    fn apply_predicate(&self, batch: &RecordBatch, _pred: &Expr) -> Result<RecordBatch> {
-        // For now, return the batch unchanged
-        // TODO: Implement actual predicate evaluation
-        Ok(batch.clone())
+    fn apply_predicate(&self, batch: &RecordBatch, pred: &Expr) -> Result<RecordBatch> {
+        use crate::expression::physical::create_physical_expr;
+        use arrow::array::BooleanArray;
+
+        // Evaluate the predicate expression
+        let physical_expr = create_physical_expr(pred, &batch.schema())?;
+        let predicate_array = physical_expr.evaluate(batch)?;
+
+        // Convert to boolean array for filtering
+        let bool_array = predicate_array
+            .as_any()
+            .downcast_ref::<BooleanArray>()
+            .ok_or_else(|| {
+                crate::error::VectrillError::InvalidExpression(
+                    "Predicate must evaluate to boolean array".to_string(),
+                )
+            })?;
+
+        // Apply the filter to all columns
+        let mut filtered_arrays = Vec::new();
+        for column in batch.columns() {
+            let filtered = arrow::compute::filter(column, bool_array)?;
+            filtered_arrays.push(filtered);
+        }
+
+        // Create the filtered batch
+        let filtered_batch = RecordBatch::try_new(batch.schema(), filtered_arrays)?;
+
+        Ok(filtered_batch)
     }
 
     /// Apply projection to select columns
@@ -127,9 +422,27 @@ impl FusedOperator {
             return Ok(batch);
         }
 
-        // For now, return the batch unchanged
-        // TODO: Implement actual projection
-        Ok(batch)
+        // Find the indices of the projected columns
+        let mut projected_arrays = Vec::new();
+        let mut projected_fields = Vec::new();
+
+        for col_name in &self.projection {
+            if let Some((col_index, _)) = batch.schema().column_with_name(col_name) {
+                projected_arrays.push(batch.column(col_index).clone());
+                projected_fields.push(batch.schema().field(col_index).clone());
+            } else {
+                return Err(crate::error::VectrillError::InvalidExpression(format!(
+                    "Column not found for projection: {}",
+                    col_name
+                )));
+            }
+        }
+
+        // Create the projected batch
+        let projected_schema = arrow::datatypes::Schema::new(projected_fields);
+        let projected_batch = RecordBatch::try_new(Arc::new(projected_schema), projected_arrays)?;
+
+        Ok(projected_batch)
     }
 }
 

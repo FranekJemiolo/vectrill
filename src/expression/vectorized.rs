@@ -1,10 +1,10 @@
 //! Vectorized operations for arithmetic expressions with SIMD optimizations
 
+use crate::error::{Result, VectrillError};
+use crate::expression::physical::ExpressionError;
 use arrow::array::*;
 use arrow::datatypes::DataType;
 use std::sync::Arc;
-use crate::error::{Result, VectrillError};
-use crate::expression::physical::ExpressionError;
 
 /// Vectorized arithmetic operations with SIMD optimizations where possible
 pub struct VectorizedOps;
@@ -16,14 +16,14 @@ impl VectorizedOps {
             (DataType::Int64, DataType::Int64) => {
                 let left_ints = left.as_any().downcast_ref::<Int64Array>().unwrap();
                 let right_ints = right.as_any().downcast_ref::<Int64Array>().unwrap();
-                
+
                 let result = Self::add_int64(left_ints, right_ints)?;
                 Ok(Arc::new(result) as ArrayRef)
             }
             (DataType::Float64, DataType::Float64) => {
                 let left_floats = left.as_any().downcast_ref::<Float64Array>().unwrap();
                 let right_floats = right.as_any().downcast_ref::<Float64Array>().unwrap();
-                
+
                 let result = Self::add_float64(left_floats, right_floats)?;
                 Ok(Arc::new(result) as ArrayRef)
             }
@@ -45,20 +45,18 @@ impl VectorizedOps {
             (DataType::Int64, DataType::Int64) => {
                 let left_ints = left.as_any().downcast_ref::<Int64Array>().unwrap();
                 let right_ints = right.as_any().downcast_ref::<Int64Array>().unwrap();
-                
+
                 let result = Self::subtract_int64(left_ints, right_ints)?;
                 Ok(Arc::new(result) as ArrayRef)
             }
             (DataType::Float64, DataType::Float64) => {
                 let left_floats = left.as_any().downcast_ref::<Float64Array>().unwrap();
                 let right_floats = right.as_any().downcast_ref::<Float64Array>().unwrap();
-                
+
                 let result = Self::subtract_float64(left_floats, right_floats)?;
                 Ok(Arc::new(result) as ArrayRef)
             }
-            _ => {
-                Self::subtract_fallback(left, right)
-            }
+            _ => Self::subtract_fallback(left, right),
         }
     }
 
@@ -68,20 +66,18 @@ impl VectorizedOps {
             (DataType::Int64, DataType::Int64) => {
                 let left_ints = left.as_any().downcast_ref::<Int64Array>().unwrap();
                 let right_ints = right.as_any().downcast_ref::<Int64Array>().unwrap();
-                
+
                 let result = Self::multiply_int64(left_ints, right_ints)?;
                 Ok(Arc::new(result) as ArrayRef)
             }
             (DataType::Float64, DataType::Float64) => {
                 let left_floats = left.as_any().downcast_ref::<Float64Array>().unwrap();
                 let right_floats = right.as_any().downcast_ref::<Float64Array>().unwrap();
-                
+
                 let result = Self::multiply_float64(left_floats, right_floats)?;
                 Ok(Arc::new(result) as ArrayRef)
             }
-            _ => {
-                Self::multiply_fallback(left, right)
-            }
+            _ => Self::multiply_fallback(left, right),
         }
     }
 
@@ -91,20 +87,18 @@ impl VectorizedOps {
             (DataType::Int64, DataType::Int64) => {
                 let left_ints = left.as_any().downcast_ref::<Int64Array>().unwrap();
                 let right_ints = right.as_any().downcast_ref::<Int64Array>().unwrap();
-                
+
                 let result = Self::divide_int64(left_ints, right_ints)?;
                 Ok(Arc::new(result) as ArrayRef)
             }
             (DataType::Float64, DataType::Float64) => {
                 let left_floats = left.as_any().downcast_ref::<Float64Array>().unwrap();
                 let right_floats = right.as_any().downcast_ref::<Float64Array>().unwrap();
-                
+
                 let result = Self::divide_float64(left_floats, right_floats)?;
                 Ok(Arc::new(result) as ArrayRef)
             }
-            _ => {
-                Self::divide_fallback(left, right)
-            }
+            _ => Self::divide_fallback(left, right),
         }
     }
 
@@ -112,7 +106,7 @@ impl VectorizedOps {
     fn add_int64(left: &Int64Array, right: &Int64Array) -> Result<Int64Array> {
         let len = left.len().max(right.len());
         let mut result = Vec::with_capacity(len);
-        
+
         if left.len() == right.len() {
             // Vectorized addition for equal lengths
             for i in 0..len {
@@ -137,7 +131,7 @@ impl VectorizedOps {
                 right_type: "Int64".to_string(),
             });
         }
-        
+
         Ok(Int64Array::from(result))
     }
 
@@ -145,7 +139,7 @@ impl VectorizedOps {
     fn add_float64(left: &Float64Array, right: &Float64Array) -> Result<Float64Array> {
         let len = left.len().max(right.len());
         let mut result = Vec::with_capacity(len);
-        
+
         if left.len() == right.len() {
             // Vectorized addition for equal lengths
             for i in 0..len {
@@ -170,7 +164,7 @@ impl VectorizedOps {
                 right_type: "Float64".to_string(),
             });
         }
-        
+
         Ok(Float64Array::from(result))
     }
 
@@ -178,7 +172,7 @@ impl VectorizedOps {
     fn subtract_int64(left: &Int64Array, right: &Int64Array) -> Result<Int64Array> {
         let len = left.len().max(right.len());
         let mut result = Vec::with_capacity(len);
-        
+
         if left.len() == right.len() {
             for i in 0..len {
                 result.push(left.value(i) - right.value(i));
@@ -200,7 +194,7 @@ impl VectorizedOps {
                 right_type: "Int64".to_string(),
             });
         }
-        
+
         Ok(Int64Array::from(result))
     }
 
@@ -208,7 +202,7 @@ impl VectorizedOps {
     fn subtract_float64(left: &Float64Array, right: &Float64Array) -> Result<Float64Array> {
         let len = left.len().max(right.len());
         let mut result = Vec::with_capacity(len);
-        
+
         if left.len() == right.len() {
             for i in 0..len {
                 result.push(left.value(i) - right.value(i));
@@ -230,7 +224,7 @@ impl VectorizedOps {
                 right_type: "Float64".to_string(),
             });
         }
-        
+
         Ok(Float64Array::from(result))
     }
 
@@ -238,7 +232,7 @@ impl VectorizedOps {
     fn multiply_int64(left: &Int64Array, right: &Int64Array) -> Result<Int64Array> {
         let len = left.len().max(right.len());
         let mut result = Vec::with_capacity(len);
-        
+
         if left.len() == right.len() {
             for i in 0..len {
                 result.push(left.value(i) * right.value(i));
@@ -260,7 +254,7 @@ impl VectorizedOps {
                 right_type: "Int64".to_string(),
             });
         }
-        
+
         Ok(Int64Array::from(result))
     }
 
@@ -268,7 +262,7 @@ impl VectorizedOps {
     fn multiply_float64(left: &Float64Array, right: &Float64Array) -> Result<Float64Array> {
         let len = left.len().max(right.len());
         let mut result = Vec::with_capacity(len);
-        
+
         if left.len() == right.len() {
             for i in 0..len {
                 result.push(left.value(i) * right.value(i));
@@ -290,7 +284,7 @@ impl VectorizedOps {
                 right_type: "Float64".to_string(),
             });
         }
-        
+
         Ok(Float64Array::from(result))
     }
 
@@ -298,7 +292,7 @@ impl VectorizedOps {
     fn divide_int64(left: &Int64Array, right: &Int64Array) -> Result<Int64Array> {
         let len = left.len().max(right.len());
         let mut result = Vec::with_capacity(len);
-        
+
         if left.len() == right.len() {
             for i in 0..len {
                 let right_val = right.value(i);
@@ -346,7 +340,7 @@ impl VectorizedOps {
                 right_type: "Int64".to_string(),
             });
         }
-        
+
         Ok(Int64Array::from(result))
     }
 
@@ -354,7 +348,7 @@ impl VectorizedOps {
     fn divide_float64(left: &Float64Array, right: &Float64Array) -> Result<Float64Array> {
         let len = left.len().max(right.len());
         let mut result = Vec::with_capacity(len);
-        
+
         if left.len() == right.len() {
             for i in 0..len {
                 let right_val = right.value(i);
@@ -402,7 +396,7 @@ impl VectorizedOps {
                 right_type: "Float64".to_string(),
             });
         }
-        
+
         Ok(Float64Array::from(result))
     }
 
@@ -447,12 +441,12 @@ impl VectorizedOps {
                 }
                 Ok(Arc::new(Float64Array::from(float_values)) as ArrayRef)
             }
-            DataType::Float64 => {
-                Ok(array.clone())
-            }
-            _ => {
-                Err(VectrillError::ExpressionError(format!("Type mismatch: expected {}, actual {}", "Int64 or Float64".to_string(), format!("{:?}", array.data_type()))))
-            }
+            DataType::Float64 => Ok(array.clone()),
+            _ => Err(VectrillError::ExpressionError(format!(
+                "Type mismatch: expected {}, actual {}",
+                "Int64 or Float64".to_string(),
+                format!("{:?}", array.data_type())
+            ))),
         }
     }
 
@@ -460,22 +454,26 @@ impl VectorizedOps {
     #[cfg(test)]
     pub fn benchmark_vectorized_ops() {
         use std::time::Instant;
-        
+
         let size = 100000;
         let left_data: Vec<i64> = (0..size).map(|i| i as i64).collect();
         let right_data: Vec<i64> = (0..size).map(|i| (i * 2) as i64).collect();
-        
+
         let left_array = Int64Array::from(left_data);
         let right_array = Int64Array::from(right_data);
         let left_ref = Arc::new(left_array) as ArrayRef;
         let right_ref = Arc::new(right_array) as ArrayRef;
-        
+
         // Benchmark vectorized addition
         let start = Instant::now();
         let _result = Self::add(&left_ref, &right_ref).unwrap();
         let duration = start.elapsed();
-        println!("Vectorized addition: {} ms for {} elements", duration.as_millis(), size);
-        
+        println!(
+            "Vectorized addition: {} ms for {} elements",
+            duration.as_millis(),
+            size
+        );
+
         // Benchmark scalar addition (for comparison)
         let start = Instant::now();
         let mut scalar_result = Vec::with_capacity(size);
@@ -484,7 +482,11 @@ impl VectorizedOps {
         }
         let _scalar_array = Int64Array::from(scalar_result);
         let duration = start.elapsed();
-        println!("Scalar addition: {} ms for {} elements", duration.as_millis(), size);
+        println!(
+            "Scalar addition: {} ms for {} elements",
+            duration.as_millis(),
+            size
+        );
     }
 }
 
@@ -500,10 +502,10 @@ mod tests {
         let right_array = Int64Array::from(right_data);
         let left_ref = Arc::new(left_array) as ArrayRef;
         let right_ref = Arc::new(right_array) as ArrayRef;
-        
+
         let result = VectorizedOps::add(&left_ref, &right_ref).unwrap();
         let result_array = result.as_any().downcast_ref::<Int64Array>().unwrap();
-        
+
         assert_eq!(result_array.len(), 4);
         assert_eq!(result_array.value(0), 6);
         assert_eq!(result_array.value(1), 8);
@@ -519,10 +521,10 @@ mod tests {
         let right_array = Int64Array::from(right_data);
         let left_ref = Arc::new(left_array) as ArrayRef;
         let right_ref = Arc::new(right_array) as ArrayRef;
-        
+
         let result = VectorizedOps::multiply(&left_ref, &right_ref).unwrap();
         let result_array = result.as_any().downcast_ref::<Int64Array>().unwrap();
-        
+
         assert_eq!(result_array.len(), 4);
         assert_eq!(result_array.value(0), 2);
         assert_eq!(result_array.value(1), 4);
@@ -538,10 +540,10 @@ mod tests {
         let right_array = Float64Array::from(right_data);
         let left_ref = Arc::new(left_array) as ArrayRef;
         let right_ref = Arc::new(right_array) as ArrayRef;
-        
+
         let result = VectorizedOps::add(&left_ref, &right_ref).unwrap();
         let result_array = result.as_any().downcast_ref::<Float64Array>().unwrap();
-        
+
         assert_eq!(result_array.len(), 3);
         assert_eq!(result_array.value(0), 2.0);
         assert_eq!(result_array.value(1), 4.0);
@@ -556,7 +558,7 @@ mod tests {
         let right_array = Int64Array::from(right_data);
         let left_ref = Arc::new(left_array) as ArrayRef;
         let right_ref = Arc::new(right_array) as ArrayRef;
-        
+
         let result = VectorizedOps::divide(&left_ref, &right_ref);
         assert!(result.is_err());
     }

@@ -18,8 +18,9 @@ pub fn export_batch_to_python(
     // In a full implementation, this would use Arrow C Data Interface
     // For now, we return simple Python objects that can be used for testing
 
-    let array_data = py.eval_bound("None", None, None)?;
-    let schema_data = py.eval_bound("None", None, None)?;
+    use std::ffi::CString;
+    let array_data = py.eval(CString::new("None").unwrap().as_c_str(), None, None)?;
+    let schema_data = py.eval(CString::new("None").unwrap().as_c_str(), None, None)?;
 
     Ok((array_data.into(), schema_data.into()))
 }

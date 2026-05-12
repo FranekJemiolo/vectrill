@@ -1,11 +1,11 @@
 //! Physical expression evaluation using Arrow kernels
 
-use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
 use super::{global_registry, Expr, Operator, ScalarValue, UnaryOp};
-use arrow::array::{Int64Array, Float64Array, BooleanArray};
+use arrow::array::{BooleanArray, Float64Array, Int64Array};
 use arrow::compute;
 
 /// Expression evaluation errors
@@ -61,29 +61,25 @@ impl ExpressionCache {
     }
 
     /// Get a cached expression or create a new one
-    pub fn get_or_create<F>(
-        &self,
-        key: &str,
-        create_fn: F,
-    ) -> Result<Arc<dyn PhysicalExpr>>
+    pub fn get_or_create<F>(&self, key: &str, create_fn: F) -> Result<Arc<dyn PhysicalExpr>>
     where
         F: FnOnce() -> Result<Arc<dyn PhysicalExpr>>,
     {
         let mut cache = self.cache.lock().unwrap();
-        
+
         // Check cache first
         if let Some(expr) = cache.get(key) {
             return Ok(expr.clone());
         }
-        
+
         // Create new expression
         let expr = create_fn()?;
-        
+
         // Add to cache if not full
         if cache.len() < self.max_size {
             cache.insert(key.to_string(), expr.clone());
         }
-        
+
         Ok(expr)
     }
 
@@ -136,15 +132,18 @@ impl ExpressionCounters {
     }
 
     pub fn record_evaluation(&self) {
-        self.evaluations.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.evaluations
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn record_cache_hit(&self) {
-        self.cache_hits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.cache_hits
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn record_cache_miss(&self) {
-        self.cache_misses.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.cache_misses
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn get_stats(&self) -> ExpressionStats {
@@ -267,7 +266,7 @@ impl PhysicalExpr for LiteralExpr {
         // Record evaluation for performance monitoring
         let counters = global_expression_counters();
         counters.lock().unwrap().record_evaluation();
-        
+
         Ok(self.array.clone())
     }
 
@@ -317,7 +316,7 @@ impl PhysicalExpr for BinaryExpr {
         // Record evaluation for performance monitoring
         let counters = global_expression_counters();
         counters.lock().unwrap().record_evaluation();
-        
+
         let left_array = self.left.evaluate(batch)?;
         let right_array = self.right.evaluate(batch)?;
 
@@ -456,38 +455,60 @@ impl PhysicalExpr for BinaryExpr {
                     (arrow::datatypes::DataType::Int64, arrow::datatypes::DataType::Int64) => {
                         let left_ints = left_array.as_any().downcast_ref::<Int64Array>().unwrap();
                         let right_ints = right_array.as_any().downcast_ref::<Int64Array>().unwrap();
-                        
+
                         // Optimized addition with broadcasting
                         let len = left_ints.len().max(right_ints.len());
                         let mut result = Vec::with_capacity(len);
-                        
+
                         for i in 0..len {
-                            let left_val = if left_ints.len() == 1 { left_ints.value(0) } else { left_ints.value(i) };
-                            let right_val = if right_ints.len() == 1 { right_ints.value(0) } else { right_ints.value(i) };
+                            let left_val = if left_ints.len() == 1 {
+                                left_ints.value(0)
+                            } else {
+                                left_ints.value(i)
+                            };
+                            let right_val = if right_ints.len() == 1 {
+                                right_ints.value(0)
+                            } else {
+                                right_ints.value(i)
+                            };
                             result.push(left_val + right_val);
                         }
-                        
+
                         Arc::new(Int64Array::from(result)) as Arc<dyn arrow::array::Array>
                     }
                     (arrow::datatypes::DataType::Float64, arrow::datatypes::DataType::Float64) => {
-                        let left_floats = left_array.as_any().downcast_ref::<Float64Array>().unwrap();
-                        let right_floats = right_array.as_any().downcast_ref::<Float64Array>().unwrap();
-                        
+                        let left_floats =
+                            left_array.as_any().downcast_ref::<Float64Array>().unwrap();
+                        let right_floats =
+                            right_array.as_any().downcast_ref::<Float64Array>().unwrap();
+
                         let len = left_floats.len().max(right_floats.len());
                         let mut result = Vec::with_capacity(len);
-                        
+
                         for i in 0..len {
-                            let left_val = if left_floats.len() == 1 { left_floats.value(0) } else { left_floats.value(i) };
-                            let right_val = if right_floats.len() == 1 { right_floats.value(0) } else { right_floats.value(i) };
+                            let left_val = if left_floats.len() == 1 {
+                                left_floats.value(0)
+                            } else {
+                                left_floats.value(i)
+                            };
+                            let right_val = if right_floats.len() == 1 {
+                                right_floats.value(0)
+                            } else {
+                                right_floats.value(i)
+                            };
                             result.push(left_val + right_val);
                         }
-                        
+
                         Arc::new(Float64Array::from(result)) as Arc<dyn arrow::array::Array>
                     }
                     _ => {
                         return Err(ExpressionError::TypeMismatch {
                             expected: "Int64 or Float64".to_string(),
-                            actual: format!("{:?} + {:?}", left_array.data_type(), right_array.data_type()),
+                            actual: format!(
+                                "{:?} + {:?}",
+                                left_array.data_type(),
+                                right_array.data_type()
+                            ),
                         });
                     }
                 }
@@ -497,40 +518,48 @@ impl PhysicalExpr for BinaryExpr {
                     (arrow::datatypes::DataType::Int64, arrow::datatypes::DataType::Int64) => {
                         let left_ints = left_array.as_any().downcast_ref::<Int64Array>().unwrap();
                         let right_ints = right_array.as_any().downcast_ref::<Int64Array>().unwrap();
-                        
+
                         let result = if left_ints.len() == right_ints.len() {
                             // Use manual subtraction for compatibility
                             let len = left_ints.len().max(right_ints.len());
                             let mut result = Vec::with_capacity(len);
-                            
+
                             for i in 0..len {
-                                let left_val = if left_ints.len() == 1 { left_ints.value(0) } else { left_ints.value(i) };
-                                let right_val = if right_ints.len() == 1 { right_ints.value(0) } else { right_ints.value(i) };
+                                let left_val = if left_ints.len() == 1 {
+                                    left_ints.value(0)
+                                } else {
+                                    left_ints.value(i)
+                                };
+                                let right_val = if right_ints.len() == 1 {
+                                    right_ints.value(0)
+                                } else {
+                                    right_ints.value(i)
+                                };
                                 result.push(left_val - right_val);
                             }
-                            
+
                             Arc::new(Int64Array::from(result)) as Arc<dyn arrow::array::Array>
                         } else if left_ints.len() == 1 && right_ints.len() > 1 {
                             // Broadcast left scalar
                             let left_val = left_ints.value(0);
                             let len = right_ints.len();
                             let mut result = Vec::with_capacity(len);
-                            
+
                             for i in 0..len {
                                 result.push(left_val - right_ints.value(i));
                             }
-                            
+
                             Arc::new(Int64Array::from(result)) as Arc<dyn arrow::array::Array>
                         } else if right_ints.len() == 1 && left_ints.len() > 1 {
                             // Broadcast right scalar
                             let right_val = right_ints.value(0);
                             let len = left_ints.len();
                             let mut result = Vec::with_capacity(len);
-                            
+
                             for i in 0..len {
                                 result.push(left_ints.value(i) - right_val);
                             }
-                            
+
                             Arc::new(Int64Array::from(result)) as Arc<dyn arrow::array::Array>
                         } else {
                             return Err(ExpressionError::InvalidOperation {
@@ -544,7 +573,11 @@ impl PhysicalExpr for BinaryExpr {
                     _ => {
                         return Err(ExpressionError::TypeMismatch {
                             expected: "Int64 or Float64".to_string(),
-                            actual: format!("{:?} - {:?}", left_array.data_type(), right_array.data_type()),
+                            actual: format!(
+                                "{:?} - {:?}",
+                                left_array.data_type(),
+                                right_array.data_type()
+                            ),
                         });
                     }
                 }
@@ -554,38 +587,38 @@ impl PhysicalExpr for BinaryExpr {
                     (arrow::datatypes::DataType::Int64, arrow::datatypes::DataType::Int64) => {
                         let left_ints = left_array.as_any().downcast_ref::<Int64Array>().unwrap();
                         let right_ints = right_array.as_any().downcast_ref::<Int64Array>().unwrap();
-                        
+
                         let result = if left_ints.len() == right_ints.len() {
                             // Use manual multiplication for compatibility
                             let len = left_ints.len();
                             let mut result = Vec::with_capacity(len);
-                            
+
                             for i in 0..len {
                                 result.push(left_ints.value(i) * right_ints.value(i));
                             }
-                            
+
                             Arc::new(Int64Array::from(result)) as Arc<dyn arrow::array::Array>
                         } else if left_ints.len() == 1 && right_ints.len() > 1 {
                             // Broadcast left scalar
                             let left_val = left_ints.value(0);
                             let len = right_ints.len();
                             let mut result = Vec::with_capacity(len);
-                            
+
                             for i in 0..len {
                                 result.push(left_val * right_ints.value(i));
                             }
-                            
+
                             Arc::new(Int64Array::from(result)) as Arc<dyn arrow::array::Array>
                         } else if right_ints.len() == 1 && left_ints.len() > 1 {
                             // Broadcast right scalar
                             let right_val = right_ints.value(0);
                             let len = left_ints.len();
                             let mut result = Vec::with_capacity(len);
-                            
+
                             for i in 0..len {
                                 result.push(left_ints.value(i) * right_val);
                             }
-                            
+
                             Arc::new(Int64Array::from(result)) as Arc<dyn arrow::array::Array>
                         } else {
                             return Err(ExpressionError::InvalidOperation {
@@ -597,40 +630,42 @@ impl PhysicalExpr for BinaryExpr {
                         Arc::new(result) as Arc<dyn arrow::array::Array>
                     }
                     (arrow::datatypes::DataType::Float64, arrow::datatypes::DataType::Float64) => {
-                        let left_floats = left_array.as_any().downcast_ref::<Float64Array>().unwrap();
-                        let right_floats = right_array.as_any().downcast_ref::<Float64Array>().unwrap();
-                        
+                        let left_floats =
+                            left_array.as_any().downcast_ref::<Float64Array>().unwrap();
+                        let right_floats =
+                            right_array.as_any().downcast_ref::<Float64Array>().unwrap();
+
                         let result = if left_floats.len() == right_floats.len() {
                             // Use manual multiplication for compatibility
                             let len = left_floats.len();
                             let mut result = Vec::with_capacity(len);
-                            
+
                             for i in 0..len {
                                 result.push(left_floats.value(i) * right_floats.value(i));
                             }
-                            
+
                             Arc::new(Float64Array::from(result)) as Arc<dyn arrow::array::Array>
                         } else if left_floats.len() == 1 && right_floats.len() > 1 {
                             // Broadcast left scalar
                             let left_val = left_floats.value(0);
                             let len = right_floats.len();
                             let mut result = Vec::with_capacity(len);
-                            
+
                             for i in 0..len {
                                 result.push(left_val * right_floats.value(i));
                             }
-                            
+
                             Arc::new(Float64Array::from(result)) as Arc<dyn arrow::array::Array>
                         } else if right_floats.len() == 1 && left_floats.len() > 1 {
                             // Broadcast right scalar
                             let right_val = right_floats.value(0);
                             let len = left_floats.len();
                             let mut result = Vec::with_capacity(len);
-                            
+
                             for i in 0..len {
                                 result.push(left_floats.value(i) * right_val);
                             }
-                            
+
                             Arc::new(Float64Array::from(result)) as Arc<dyn arrow::array::Array>
                         } else {
                             return Err(ExpressionError::InvalidOperation {
@@ -644,7 +679,11 @@ impl PhysicalExpr for BinaryExpr {
                     _ => {
                         return Err(ExpressionError::TypeMismatch {
                             expected: "Int64 or Float64".to_string(),
-                            actual: format!("{:?} * {:?}", left_array.data_type(), right_array.data_type()),
+                            actual: format!(
+                                "{:?} * {:?}",
+                                left_array.data_type(),
+                                right_array.data_type()
+                            ),
                         });
                     }
                 }
@@ -725,7 +764,7 @@ impl PhysicalExpr for UnaryExpr {
     ) -> Result<Arc<dyn arrow::array::Array>> {
         let counters = global_expression_counters();
         counters.lock().unwrap().record_evaluation();
-        
+
         let array = self.expr.evaluate(batch)?;
 
         let result = match self.op {
@@ -799,7 +838,7 @@ impl PhysicalExpr for CastExpr {
         // Record evaluation for performance monitoring
         let counters = global_expression_counters();
         counters.lock().unwrap().record_evaluation();
-        
+
         let expr_array = self.expr.evaluate(batch)?;
 
         // Simplified cast implementation
@@ -849,11 +888,8 @@ impl PhysicalExpr for FunctionExpr {
         // Record evaluation for performance monitoring
         let counters = global_expression_counters();
         counters.lock().unwrap().record_evaluation();
-        
-        let args: Result<Vec<_>> = self.args
-            .iter()
-            .map(|arg| arg.evaluate(batch))
-            .collect();
+
+        let args: Result<Vec<_>> = self.args.iter().map(|arg| arg.evaluate(batch)).collect();
         let arg_arrays = args?;
 
         // Use the global function registry to look up and execute the function
@@ -905,13 +941,11 @@ pub fn create_physical_expr(
 ) -> Result<Arc<dyn PhysicalExpr>> {
     // Create cache key for this expression
     let cache_key = format!("{:?}", expr);
-    
+
     // Use global cache for performance optimization
     let cache = global_expression_cache();
-    
-    cache.get_or_create(&cache_key, || {
-        create_physical_expr_internal(expr, schema)
-    })
+
+    cache.get_or_create(&cache_key, || create_physical_expr_internal(expr, schema))
 }
 
 /// Internal function to create physical expression without caching

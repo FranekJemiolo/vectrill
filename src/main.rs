@@ -19,8 +19,6 @@ struct Args {
 
 #[cfg(feature = "cli")]
 fn main() {
-    tracing_subscriber::fmt::init();
-
     let args = Args::parse();
 
     if args.dummy {

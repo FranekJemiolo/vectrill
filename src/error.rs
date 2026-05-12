@@ -48,6 +48,10 @@ pub enum VectrillError {
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
+    /// Physical expression error
+    #[error("Physical expression error: {0}")]
+    PhysicalExpression(#[from] crate::expression::physical::ExpressionError),
+
     /// Transformation error
     #[error("Transformation error: {0}")]
     Transformation(String),

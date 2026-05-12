@@ -96,7 +96,7 @@ impl PySequencer {
         if let Some(batch) = self.inner.next_batch() {
             let (array, schema) = export_batch_to_python(&batch, py)?;
             // Return a tuple (array, schema) representing the Arrow C Data Interface
-            Ok(Some((array, schema).to_object(py)))
+            Ok(Some((array, schema).into_pyobject(py)?.into()))
         } else {
             Ok(None)
         }
@@ -118,7 +118,7 @@ impl PySequencer {
     fn flush(&mut self, py: Python) -> PyResult<Option<PyObject>> {
         if let Some(batch) = self.inner.next_batch() {
             let (array, schema) = export_batch_to_python(&batch, py)?;
-            Ok(Some((array, schema).to_object(py)))
+            Ok(Some((array, schema).into_pyobject(py)?.into()))
         } else {
             Ok(None)
         }
@@ -127,7 +127,7 @@ impl PySequencer {
     /// Create a default configuration dictionary
     #[staticmethod]
     fn default_config(py: Python) -> PyResult<PyObject> {
-        let config = PyDict::new_bound(py);
+        let config = PyDict::new(py);
 
         config.set_item("ordering", "by_timestamp")?;
         config.set_item("late_data_policy", "drop")?;
