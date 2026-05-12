@@ -4,7 +4,8 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use super::{global_registry, Expr, Operator, ScalarValue, UnaryOp};
-use arrow::array::Int64Array;
+use arrow::array::{Int64Array, Float64Array, BooleanArray};
+use arrow::compute;
 
 /// Expression evaluation errors
 #[derive(Debug, Error)]
@@ -300,114 +301,209 @@ impl PhysicalExpr for BinaryExpr {
                     as Arc<dyn arrow::array::Array>
             }
 
-            // Arithmetic operators - actual implementation
+            // Arithmetic operators - vectorized implementation using Arrow compute kernels
             Operator::Add => {
-                let left_ints = left_array.as_any().downcast_ref::<Int64Array>().ok_or(
-                    ExpressionError::TypeMismatch {
-                        expected: "Int64".to_string(),
-                        actual: format!("{:?}", left_array.data_type()),
-                    },
-                )?;
-                let right_ints = right_array.as_any().downcast_ref::<Int64Array>().ok_or(
-                    ExpressionError::TypeMismatch {
-                        expected: "Int64".to_string(),
-                        actual: format!("{:?}", right_array.data_type()),
-                    },
-                )?;
-
-                let len = left_ints.len();
-                let mut result_array = Vec::with_capacity(len);
-                for i in 0..len {
-                    // Broadcast scalar if right array has length 1
-                    let right_val = if right_ints.len() == 1 {
-                        right_ints.value(0)
-                    } else {
-                        right_ints.value(i)
-                    };
-                    result_array.push(left_ints.value(i) + right_val);
+                match (left_array.data_type(), right_array.data_type()) {
+                    (arrow::datatypes::DataType::Int64, arrow::datatypes::DataType::Int64) => {
+                        let left_ints = left_array.as_any().downcast_ref::<Int64Array>().unwrap();
+                        let right_ints = right_array.as_any().downcast_ref::<Int64Array>().unwrap();
+                        
+                        // Use vectorized addition with simple broadcasting
+                        let result = if left_ints.len() == right_ints.len() {
+                            compute::add(left_ints, right_ints)?
+                        } else if left_ints.len() == 1 && right_ints.len() > 1 {
+                            // Broadcast left scalar
+                            compute::add_scalar(right_ints, left_ints.value(0))?
+                        } else if right_ints.len() == 1 && left_ints.len() > 1 {
+                            // Broadcast right scalar
+                            compute::add_scalar(left_ints, right_ints.value(0))?
+                        } else {
+                            return Err(ExpressionError::InvalidOperation {
+                                op: "add".to_string(),
+                                left_type: "Int64".to_string(),
+                                right_type: "Int64".to_string(),
+                            });
+                        };
+                        Arc::new(result) as Arc<dyn arrow::array::Array>
+                    }
+                    (arrow::datatypes::DataType::Float64, arrow::datatypes::DataType::Float64) => {
+                        let left_floats = left_array.as_any().downcast_ref::<Float64Array>().unwrap();
+                        let right_floats = right_array.as_any().downcast_ref::<Float64Array>().unwrap();
+                        
+                        let result = if left_floats.len() == right_floats.len() {
+                            compute::add(left_floats, right_floats)?
+                        } else if left_floats.len() == 1 && right_floats.len() > 1 {
+                            compute::add_scalar(right_floats, left_floats.value(0))?
+                        } else if right_floats.len() == 1 && left_floats.len() > 1 {
+                            compute::add_scalar(left_floats, right_floats.value(0))?
+                        } else {
+                            return Err(ExpressionError::InvalidOperation {
+                                op: "add".to_string(),
+                                left_type: "Float64".to_string(),
+                                right_type: "Float64".to_string(),
+                            });
+                        };
+                        Arc::new(result) as Arc<dyn arrow::array::Array>
+                    }
+                    _ => {
+                        return Err(ExpressionError::TypeMismatch {
+                            expected: "Int64 or Float64".to_string(),
+                            actual: format!("{:?} + {:?}", left_array.data_type(), right_array.data_type()),
+                        });
+                    }
                 }
-                Arc::new(Int64Array::from(result_array)) as Arc<dyn arrow::array::Array>
             }
             Operator::Sub => {
-                let left_ints = left_array.as_any().downcast_ref::<Int64Array>().ok_or(
-                    ExpressionError::TypeMismatch {
-                        expected: "Int64".to_string(),
-                        actual: format!("{:?}", left_array.data_type()),
-                    },
-                )?;
-                let right_ints = right_array.as_any().downcast_ref::<Int64Array>().ok_or(
-                    ExpressionError::TypeMismatch {
-                        expected: "Int64".to_string(),
-                        actual: format!("{:?}", right_array.data_type()),
-                    },
-                )?;
-
-                let len = left_ints.len();
-                let mut result_array = Vec::with_capacity(len);
-                for i in 0..len {
-                    // Broadcast scalar if right array has length 1
-                    let right_val = if right_ints.len() == 1 {
-                        right_ints.value(0)
-                    } else {
-                        right_ints.value(i)
-                    };
-                    result_array.push(left_ints.value(i) - right_val);
+                match (left_array.data_type(), right_array.data_type()) {
+                    (arrow::datatypes::DataType::Int64, arrow::datatypes::DataType::Int64) => {
+                        let left_ints = left_array.as_any().downcast_ref::<Int64Array>().unwrap();
+                        let right_ints = right_array.as_any().downcast_ref::<Int64Array>().unwrap();
+                        
+                        let result = if left_ints.len() == right_ints.len() {
+                            compute::subtract(left_ints, right_ints)?
+                        } else if left_ints.len() == 1 && right_ints.len() > 1 {
+                            compute::subtract_scalar(right_ints, left_ints.value(0))?
+                        } else if right_ints.len() == 1 && left_ints.len() > 1 {
+                            compute::subtract_scalar(left_ints, right_ints.value(0))?
+                        } else {
+                            return Err(ExpressionError::InvalidOperation {
+                                op: "subtract".to_string(),
+                                left_type: "Int64".to_string(),
+                                right_type: "Int64".to_string(),
+                            });
+                        };
+                        Arc::new(result) as Arc<dyn arrow::array::Array>
+                    }
+                    (arrow::datatypes::DataType::Float64, arrow::datatypes::DataType::Float64) => {
+                        let left_floats = left_array.as_any().downcast_ref::<Float64Array>().unwrap();
+                        let right_floats = right_array.as_any().downcast_ref::<Float64Array>().unwrap();
+                        
+                        let result = if left_floats.len() == right_floats.len() {
+                            compute::subtract(left_floats, right_floats)?
+                        } else if left_floats.len() == 1 && right_floats.len() > 1 {
+                            compute::subtract_scalar(right_floats, left_floats.value(0))?
+                        } else if right_floats.len() == 1 && left_floats.len() > 1 {
+                            compute::subtract_scalar(left_floats, right_floats.value(0))?
+                        } else {
+                            return Err(ExpressionError::InvalidOperation {
+                                op: "subtract".to_string(),
+                                left_type: "Float64".to_string(),
+                                right_type: "Float64".to_string(),
+                            });
+                        };
+                        Arc::new(result) as Arc<dyn arrow::array::Array>
+                    }
+                    _ => {
+                        return Err(ExpressionError::TypeMismatch {
+                            expected: "Int64 or Float64".to_string(),
+                            actual: format!("{:?} - {:?}", left_array.data_type(), right_array.data_type()),
+                        });
+                    }
                 }
-                Arc::new(Int64Array::from(result_array)) as Arc<dyn arrow::array::Array>
             }
             Operator::Mul => {
-                let left_ints = left_array.as_any().downcast_ref::<Int64Array>().ok_or(
-                    ExpressionError::TypeMismatch {
-                        expected: "Int64".to_string(),
-                        actual: format!("{:?}", left_array.data_type()),
-                    },
-                )?;
-                let right_ints = right_array.as_any().downcast_ref::<Int64Array>().ok_or(
-                    ExpressionError::TypeMismatch {
-                        expected: "Int64".to_string(),
-                        actual: format!("{:?}", right_array.data_type()),
-                    },
-                )?;
-
-                let len = left_ints.len();
-                let mut result_array = Vec::with_capacity(len);
-                for i in 0..len {
-                    // Broadcast scalar if right array has length 1
-                    let right_val = if right_ints.len() == 1 {
-                        right_ints.value(0)
-                    } else {
-                        right_ints.value(i)
-                    };
-                    result_array.push(left_ints.value(i) * right_val);
+                match (left_array.data_type(), right_array.data_type()) {
+                    (arrow::datatypes::DataType::Int64, arrow::datatypes::DataType::Int64) => {
+                        let left_ints = left_array.as_any().downcast_ref::<Int64Array>().unwrap();
+                        let right_ints = right_array.as_any().downcast_ref::<Int64Array>().unwrap();
+                        
+                        let result = if left_ints.len() == right_ints.len() {
+                            compute::multiply(left_ints, right_ints)?
+                        } else if left_ints.len() == 1 {
+                            let left_scalar_array = arrow::array::new_scalar_array(&left_ints.value(0));
+                            compute::multiply_scalar(right_ints, &left_scalar_array)?
+                        } else if right_ints.len() == 1 {
+                            let right_scalar_array = arrow::array::new_scalar_array(&right_ints.value(0));
+                            compute::multiply_scalar(left_ints, &right_scalar_array)?
+                        } else {
+                            return Err(ExpressionError::InvalidOperation {
+                                op: "multiply".to_string(),
+                                left_type: "Int64".to_string(),
+                                right_type: "Int64".to_string(),
+                            });
+                        };
+                        Arc::new(result) as Arc<dyn arrow::array::Array>
+                    }
+                    (arrow::datatypes::DataType::Float64, arrow::datatypes::DataType::Float64) => {
+                        let left_floats = left_array.as_any().downcast_ref::<Float64Array>().unwrap();
+                        let right_floats = right_array.as_any().downcast_ref::<Float64Array>().unwrap();
+                        
+                        let result = if left_floats.len() == right_floats.len() {
+                            compute::multiply(left_floats, right_floats)?
+                        } else if left_floats.len() == 1 {
+                            let left_scalar_array = arrow::array::new_scalar_array(&left_floats.value(0));
+                            compute::multiply_scalar(right_floats, &left_scalar_array)?
+                        } else if right_floats.len() == 1 {
+                            let right_scalar_array = arrow::array::new_scalar_array(&right_floats.value(0));
+                            compute::multiply_scalar(left_floats, &right_scalar_array)?
+                        } else {
+                            return Err(ExpressionError::InvalidOperation {
+                                op: "multiply".to_string(),
+                                left_type: "Float64".to_string(),
+                                right_type: "Float64".to_string(),
+                            });
+                        };
+                        Arc::new(result) as Arc<dyn arrow::array::Array>
+                    }
+                    _ => {
+                        return Err(ExpressionError::TypeMismatch {
+                            expected: "Int64 or Float64".to_string(),
+                            actual: format!("{:?} * {:?}", left_array.data_type(), right_array.data_type()),
+                        });
+                    }
                 }
-                Arc::new(Int64Array::from(result_array)) as Arc<dyn arrow::array::Array>
             }
             Operator::Div => {
-                let left_ints = left_array.as_any().downcast_ref::<Int64Array>().ok_or(
-                    ExpressionError::TypeMismatch {
-                        expected: "Int64".to_string(),
-                        actual: format!("{:?}", left_array.data_type()),
-                    },
-                )?;
-                let right_ints = right_array.as_any().downcast_ref::<Int64Array>().ok_or(
-                    ExpressionError::TypeMismatch {
-                        expected: "Int64".to_string(),
-                        actual: format!("{:?}", right_array.data_type()),
-                    },
-                )?;
-
-                let len = left_ints.len();
-                let mut result_array = Vec::with_capacity(len);
-                for i in 0..len {
-                    // Broadcast scalar if right array has length 1
-                    let right_val = if right_ints.len() == 1 {
-                        right_ints.value(0)
-                    } else {
-                        right_ints.value(i)
-                    };
-                    result_array.push(left_ints.value(i) / right_val);
+                match (left_array.data_type(), right_array.data_type()) {
+                    (arrow::datatypes::DataType::Int64, arrow::datatypes::DataType::Int64) => {
+                        let left_ints = left_array.as_any().downcast_ref::<Int64Array>().unwrap();
+                        let right_ints = right_array.as_any().downcast_ref::<Int64Array>().unwrap();
+                        
+                        let result = if left_ints.len() == right_ints.len() {
+                            compute::divide(left_ints, right_ints)?
+                        } else if left_ints.len() == 1 {
+                            let left_scalar_array = arrow::array::new_scalar_array(&left_ints.value(0));
+                            compute::divide_scalar(right_ints, &left_scalar_array)?
+                        } else if right_ints.len() == 1 {
+                            let right_scalar_array = arrow::array::new_scalar_array(&right_ints.value(0));
+                            compute::divide_scalar(left_ints, &right_scalar_array)?
+                        } else {
+                            return Err(ExpressionError::InvalidOperation {
+                                op: "divide".to_string(),
+                                left_type: "Int64".to_string(),
+                                right_type: "Int64".to_string(),
+                            });
+                        };
+                        Arc::new(result) as Arc<dyn arrow::array::Array>
+                    }
+                    (arrow::datatypes::DataType::Float64, arrow::datatypes::DataType::Float64) => {
+                        let left_floats = left_array.as_any().downcast_ref::<Float64Array>().unwrap();
+                        let right_floats = right_array.as_any().downcast_ref::<Float64Array>().unwrap();
+                        
+                        let result = if left_floats.len() == right_floats.len() {
+                            compute::divide(left_floats, right_floats)?
+                        } else if left_floats.len() == 1 {
+                            let left_scalar_array = arrow::array::new_scalar_array(&left_floats.value(0));
+                            compute::divide_scalar(right_floats, &left_scalar_array)?
+                        } else if right_floats.len() == 1 {
+                            let right_scalar_array = arrow::array::new_scalar_array(&right_floats.value(0));
+                            compute::divide_scalar(left_floats, &right_scalar_array)?
+                        } else {
+                            return Err(ExpressionError::InvalidOperation {
+                                op: "divide".to_string(),
+                                left_type: "Float64".to_string(),
+                                right_type: "Float64".to_string(),
+                            });
+                        };
+                        Arc::new(result) as Arc<dyn arrow::array::Array>
+                    }
+                    _ => {
+                        return Err(ExpressionError::TypeMismatch {
+                            expected: "Int64 or Float64".to_string(),
+                            actual: format!("{:?} / {:?}", left_array.data_type(), right_array.data_type()),
+                        });
+                    }
                 }
-                Arc::new(Int64Array::from(result_array)) as Arc<dyn arrow::array::Array>
             }
 
             // Boolean operations
