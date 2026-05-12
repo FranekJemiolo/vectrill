@@ -1,49 +1,119 @@
-//! Memory optimization - buffer pooling for Arrow arrays
+//! Memory optimization - enhanced buffer pooling for Arrow arrays
 
 use arrow::array::ArrayRef;
 use arrow::datatypes::DataType;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
-/// Buffer pool for reusing Arrow arrays
+/// Enhanced buffer pool for reusing Arrow arrays with LRU eviction
 pub struct BufferPool {
-    /// Pools keyed by data type
-    pools: Mutex<HashMap<DataType, Vec<ArrayRef>>>,
+    /// Pools keyed by data type using LRU
+    pools: Mutex<HashMap<DataType, VecDeque<ArrayRef>>>,
     /// Maximum size per pool
     max_size_per_pool: usize,
+    /// Memory pressure threshold in bytes
+    memory_pressure_threshold: usize,
+    /// Total memory allocated across all pools
+    total_memory_bytes: std::sync::atomic::AtomicUsize,
+    /// Last cleanup time
+    last_cleanup: std::sync::Mutex<Instant>,
 }
 
 impl BufferPool {
-    /// Create a new buffer pool
+    /// Create a new buffer pool with enhanced features
     pub fn new(max_size_per_pool: usize) -> Self {
         Self {
             pools: Mutex::new(HashMap::new()),
             max_size_per_pool,
+            memory_pressure_threshold: max_size_per_pool * 1024 * 100, // 100MB default threshold
+            total_memory_bytes: std::sync::atomic::AtomicUsize::new(0),
+            last_cleanup: std::sync::Mutex::new(Instant::now()),
         }
     }
 
-    /// Get an array from the pool or create a new one
+    /// Create a buffer pool with custom configuration
+    pub fn with_config(max_size_per_pool: usize, memory_pressure_threshold: usize) -> Self {
+        Self {
+            pools: Mutex::new(HashMap::new()),
+            max_size_per_pool,
+            memory_pressure_threshold,
+            total_memory_bytes: std::sync::atomic::AtomicUsize::new(0),
+            last_cleanup: std::sync::Mutex::new(Instant::now()),
+        }
+    }
+
+    /// Get an array from the pool with LRU eviction and memory pressure detection
     pub fn get_array(&self, dtype: &DataType, capacity: usize) -> ArrayRef {
         let mut pools = self.pools.lock().unwrap();
         let pool = pools.entry(dtype.clone()).or_default();
 
-        // Try to find a suitable buffer
+        // Check memory pressure and cleanup if needed
+        self.check_memory_pressure(&mut pools);
+
+        // Try to find a suitable buffer using LRU
         if let Some(idx) = pool.iter().position(|arr| arr.len() >= capacity) {
-            pool.swap_remove(idx)
+            let array = pool.remove(idx).unwrap();
+            // Move to back (most recently used)
+            pool.push_back(array);
+            array
         } else {
-            // Create a new array
-            self.create_array(dtype, capacity)
+            // Create a new array and track memory
+            let array = self.create_array(dtype, capacity);
+            self.track_memory_usage(&array);
+            pool.push_back(array);
+            
+            // Enforce pool size limit
+            if pool.len() > self.max_size_per_pool {
+                pool.pop_front(); // Remove oldest
+            }
+            
+            array
         }
     }
 
-    /// Return an array to the pool
+    /// Check memory pressure and cleanup if needed
+    fn check_memory_pressure(&self, pools: &mut HashMap<DataType, VecDeque<ArrayRef>>) {
+        let current_memory = self.total_memory_bytes.load(std::sync::atomic::Ordering::Relaxed);
+        let last_cleanup = *self.last_cleanup.lock().unwrap();
+        
+        // Cleanup if memory pressure threshold exceeded or cleanup interval passed
+        if current_memory > self.memory_pressure_threshold || 
+           last_cleanup.elapsed() > Duration::from_secs(60) {
+            self.cleanup_old_buffers(pools);
+            *self.last_cleanup.lock().unwrap() = Instant::now();
+        }
+    }
+
+    /// Track memory usage for allocated arrays
+    fn track_memory_usage(&self, array: &ArrayRef) {
+        let memory_bytes = array.get_buffer_memory_size();
+        self.total_memory_bytes.fetch_add(memory_bytes, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Cleanup old buffers to free memory
+    fn cleanup_old_buffers(&self, pools: &mut HashMap<DataType, VecDeque<ArrayRef>>) {
+        for (_, pool) in pools.iter_mut() {
+            // Remove buffers that haven't been used recently (keep half)
+            let keep_count = (pool.len() / 2).max(1);
+            while pool.len() > keep_count {
+                pool.pop_front();
+            }
+        }
+    }
+
+    /// Return an array to the pool with LRU management
     pub fn return_array(&self, array: ArrayRef) {
         let mut pools = self.pools.lock().unwrap();
         let dtype = array.data_type().clone();
         let pool = pools.entry(dtype).or_default();
 
-        if pool.len() < self.max_size_per_pool {
-            pool.push(array);
+        // Add to back (most recently used)
+        pool.push_back(array);
+        
+        // Enforce pool size limit
+        if pool.len() > self.max_size_per_pool {
+            pool.pop_front(); // Remove oldest
         }
     }
 
@@ -78,8 +148,8 @@ impl BufferPool {
         pools.clear();
     }
 
-    /// Get statistics about the pool
-    pub fn stats(&self) -> PoolStats {
+    /// Get enhanced statistics about the pool
+    pub fn stats(&self) -> EnhancedPoolStats {
         let pools = self.pools.lock().unwrap();
         let total_arrays: usize = pools.values().map(|v| v.len()).sum();
         let total_bytes: usize = pools
@@ -87,11 +157,31 @@ impl BufferPool {
             .flat_map(|v| v.iter())
             .map(|arr| arr.get_buffer_memory_size())
             .sum();
+        
+        let current_memory = self.total_memory_bytes.load(std::sync::atomic::Ordering::Relaxed);
+        let memory_pressure = current_memory > self.memory_pressure_threshold;
+        let last_cleanup = *self.last_cleanup.lock().unwrap();
+        let cleanup_elapsed = last_cleanup.elapsed();
 
-        PoolStats {
+        EnhancedPoolStats {
             total_arrays,
             total_bytes,
             pools_count: pools.len(),
+            current_memory_bytes: current_memory,
+            memory_pressure,
+            memory_pressure_threshold: self.memory_pressure_threshold,
+            last_cleanup_time: last_cleanup,
+            cleanup_interval_elapsed: cleanup_elapsed,
+        }
+    }
+
+    /// Get basic statistics for backward compatibility
+    pub fn basic_stats(&self) -> PoolStats {
+        let enhanced = self.stats();
+        PoolStats {
+            total_arrays: enhanced.total_arrays,
+            total_bytes: enhanced.total_bytes,
+            pools_count: enhanced.pools_count,
         }
     }
 }
@@ -108,6 +198,19 @@ pub struct PoolStats {
     pub total_arrays: usize,
     pub total_bytes: usize,
     pub pools_count: usize,
+}
+
+/// Enhanced statistics about the buffer pool with memory monitoring
+#[derive(Debug, Clone)]
+pub struct EnhancedPoolStats {
+    pub total_arrays: usize,
+    pub total_bytes: usize,
+    pub pools_count: usize,
+    pub current_memory_bytes: usize,
+    pub memory_pressure: bool,
+    pub memory_pressure_threshold: usize,
+    pub last_cleanup_time: std::time::Instant,
+    pub cleanup_interval_elapsed: std::time::Duration,
 }
 
 /// Global buffer pool instance
