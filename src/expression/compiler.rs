@@ -320,6 +320,18 @@ impl ExpressionCompiler {
                     return simplified;
                 }
 
+                // Debug: Check if we're trying to simplify y - y
+                if *op == Operator::Sub {
+                    println!("Trying to simplify: {:?} - {:?}", folded_left, folded_right);
+                    if let (Expr::Column(ref left_col), Expr::Column(ref right_col)) =
+                        (&folded_left, &folded_right)
+                    {
+                        if left_col == right_col {
+                            println!("Should fold {:?} - {:?} to 0", left_col, right_col);
+                        }
+                    }
+                }
+
                 // Return folded binary expression
                 Expr::Binary {
                     left: Box::new(folded_left),
@@ -496,21 +508,17 @@ impl ExpressionCompiler {
     /// Evaluate a function call on constant arguments
     fn evaluate_function(&self, name: &str, args: &[Expr]) -> Option<ScalarValue> {
         match name {
-            "abs" => {
-                if args.len() == 1 {
-                    if let Expr::Literal(ScalarValue::Int64(v)) = &args[0] {
-                        return Some(ScalarValue::Int64(v.abs()));
-                    }
-                    if let Expr::Literal(ScalarValue::Float64(v)) = &args[0] {
-                        return Some(ScalarValue::Float64(v.abs()));
-                    }
+            "abs" if args.len() == 1 => {
+                if let Expr::Literal(ScalarValue::Int64(v)) = &args[0] {
+                    return Some(ScalarValue::Int64(v.abs()));
+                }
+                if let Expr::Literal(ScalarValue::Float64(v)) = &args[0] {
+                    return Some(ScalarValue::Float64(v.abs()));
                 }
             }
-            "length" => {
-                if args.len() == 1 {
-                    if let Expr::Literal(ScalarValue::Utf8(s)) = &args[0] {
-                        return Some(ScalarValue::Int64(s.len() as i64));
-                    }
+            "length" if args.len() == 1 => {
+                if let Expr::Literal(ScalarValue::Utf8(s)) = &args[0] {
+                    return Some(ScalarValue::Int64(s.len() as i64));
                 }
             }
             _ => {}
@@ -627,12 +635,10 @@ impl ExpressionCompiler {
                 }
             }
             // Comparison simplifications
-            Operator::Eq => {
+            Operator::Eq if left == right => {
                 // x = x is always true (for non-null values)
-                if left == right {
-                    if let (Expr::Literal(_), Expr::Literal(_)) = (left, right) {
-                        return Some(Expr::Literal(ScalarValue::Boolean(true)));
-                    }
+                if let (Expr::Literal(_), Expr::Literal(_)) = (left, right) {
+                    return Some(Expr::Literal(ScalarValue::Boolean(true)));
                 }
             }
             _ => {}
@@ -677,43 +683,37 @@ impl ExpressionCompiler {
     /// Simplify function expressions using mathematical identities
     fn simplify_function_expression(&self, name: &str, args: &[Expr]) -> Option<Expr> {
         match name {
-            "abs" => {
-                if args.len() == 1 {
-                    // abs(abs(x)) = abs(x)
-                    if let Expr::Function {
-                        name: inner_name,
-                        args: inner_args,
-                    } = &args[0]
-                    {
-                        if inner_name == "abs" {
-                            return Some(args[0].clone());
-                        }
+            "abs" if args.len() == 1 => {
+                // abs(abs(x)) = abs(x)
+                if let Expr::Function {
+                    name: inner_name,
+                    args: _inner_args,
+                } = &args[0]
+                {
+                    if inner_name == "abs" {
+                        return Some(args[0].clone());
                     }
-                    // abs(0) = 0, abs(positive) = positive
-                    if let Expr::Literal(val) = &args[0] {
-                        if let Some(abs_val) = self.evaluate_function("abs", args) {
-                            return Some(Expr::Literal(abs_val));
-                        }
+                }
+                // abs(0) = 0, abs(positive) = positive
+                if let Expr::Literal(_val) = &args[0] {
+                    if let Some(abs_val) = self.evaluate_function("abs", args) {
+                        return Some(Expr::Literal(abs_val));
                     }
                 }
             }
-            "sqrt" => {
-                if args.len() == 1 {
-                    // sqrt(0) = 0, sqrt(1) = 1
-                    if let Expr::Literal(val) = &args[0] {
-                        if let Some(sqrt_val) = self.evaluate_function("sqrt", args) {
-                            return Some(Expr::Literal(sqrt_val));
-                        }
+            "sqrt" if args.len() == 1 => {
+                // sqrt(0) = 0, sqrt(1) = 1
+                if let Expr::Literal(_val) = &args[0] {
+                    if let Some(sqrt_val) = self.evaluate_function("sqrt", args) {
+                        return Some(Expr::Literal(sqrt_val));
                     }
                 }
             }
-            "length" => {
-                if args.len() == 1 {
-                    // length("") = 0
-                    if let Expr::Literal(ScalarValue::Utf8(s)) = &args[0] {
-                        if s.is_empty() {
-                            return Some(Expr::Literal(ScalarValue::Int64(0)));
-                        }
+            "length" if args.len() == 1 => {
+                // length("") = 0
+                if let Expr::Literal(ScalarValue::Utf8(s)) = &args[0] {
+                    if s.is_empty() {
+                        return Some(Expr::Literal(ScalarValue::Int64(0)));
                     }
                 }
             }
@@ -724,22 +724,18 @@ impl ExpressionCompiler {
 
     /// Check if a cast is redundant
     fn is_cast_redundant(&self, val: &ScalarValue, target_type: &str) -> bool {
-        match (val, target_type) {
-            (ScalarValue::Int64(_), "Int64") => true,
-            (ScalarValue::Float64(_), "Float64") => true,
-            (ScalarValue::Utf8(_), "Utf8") => true,
-            (ScalarValue::Boolean(_), "Boolean") => true,
-            _ => false,
-        }
+        matches!(
+            (val, target_type),
+            (ScalarValue::Int64(_), "Int64")
+                | (ScalarValue::Float64(_), "Float64")
+                | (ScalarValue::Utf8(_), "Utf8")
+                | (ScalarValue::Boolean(_), "Boolean")
+        )
     }
 
     /// Check if a scalar value represents zero
     fn is_zero_value(&self, val: &ScalarValue) -> bool {
-        match val {
-            ScalarValue::Int64(0) => true,
-            ScalarValue::Float64(0.0) => true,
-            _ => false,
-        }
+        matches!(val, ScalarValue::Int64(0) | ScalarValue::Float64(0.0))
     }
 }
 
@@ -1382,13 +1378,17 @@ mod tests {
         );
         let folded = compiler.constant_fold(&expr);
 
-        // Should simplify to x - 0 = x
+        // Debug: Print what we got
+        println!("Folded expression: {:?}", folded);
+
+        // Should simplify to x - 0 = x (since y - y = 0)
         if let Expr::Binary { left, op, right } = folded {
             assert_eq!(*left, Expr::Column("x".to_string()));
             assert_eq!(op, Operator::Sub);
+            // The right side should be folded to 0
             assert_eq!(*right, Expr::Literal(ScalarValue::Int64(0)));
         } else {
-            panic!("Expected binary expression");
+            panic!("Expected binary expression, got: {:?}", folded);
         }
     }
 

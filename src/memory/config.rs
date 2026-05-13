@@ -235,8 +235,7 @@ impl MemoryUsageTracker {
             0.0
         } else {
             let recent = &self.usage_history[self.usage_history.len() - 2..];
-            let slope = (recent[1] - recent[0]) / recent[0].max(1.0);
-            slope
+            (recent[1] - recent[0]) / recent[0].max(1.0)
         }
     }
 

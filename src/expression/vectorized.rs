@@ -27,11 +27,6 @@ impl VectorizedOps {
                 let result = Self::add_float64(left_floats, right_floats)?;
                 Ok(Arc::new(result) as ArrayRef)
             }
-            // Handle broadcasting cases
-            (DataType::Int64, DataType::Int64) => {
-                // This is handled by the same type case above
-                Self::add(left, right)
-            }
             _ => {
                 // Fallback to scalar operations for mixed types
                 Self::add_fallback(left, right)
@@ -125,11 +120,13 @@ impl VectorizedOps {
                 result.push(left.value(i) + right_val);
             }
         } else {
-            Err::<ArrayRef, _>(ExpressionError::InvalidOperation {
-                op: "add".to_string(),
-                left_type: "Int64".to_string(),
-                right_type: "Int64".to_string(),
-            });
+            return Err(VectrillError::PhysicalExpression(
+                ExpressionError::InvalidOperation {
+                    op: "add".to_string(),
+                    left_type: "Int64".to_string(),
+                    right_type: "Int64".to_string(),
+                },
+            ));
         }
 
         Ok(Int64Array::from(result))
@@ -158,11 +155,13 @@ impl VectorizedOps {
                 result.push(left.value(i) + right_val);
             }
         } else {
-            Err::<ArrayRef, _>(ExpressionError::InvalidOperation {
-                op: "add".to_string(),
-                left_type: "Float64".to_string(),
-                right_type: "Float64".to_string(),
-            });
+            return Err(VectrillError::PhysicalExpression(
+                ExpressionError::InvalidOperation {
+                    op: "add".to_string(),
+                    left_type: "Float64".to_string(),
+                    right_type: "Float64".to_string(),
+                },
+            ));
         }
 
         Ok(Float64Array::from(result))
@@ -188,11 +187,13 @@ impl VectorizedOps {
                 result.push(left.value(i) - right_val);
             }
         } else {
-            Err::<ArrayRef, _>(ExpressionError::InvalidOperation {
-                op: "subtract".to_string(),
-                left_type: "Int64".to_string(),
-                right_type: "Int64".to_string(),
-            });
+            return Err(VectrillError::PhysicalExpression(
+                ExpressionError::InvalidOperation {
+                    op: "subtract".to_string(),
+                    left_type: "Int64".to_string(),
+                    right_type: "Int64".to_string(),
+                },
+            ));
         }
 
         Ok(Int64Array::from(result))
@@ -218,11 +219,13 @@ impl VectorizedOps {
                 result.push(left.value(i) - right_val);
             }
         } else {
-            Err::<ArrayRef, _>(ExpressionError::InvalidOperation {
-                op: "subtract".to_string(),
-                left_type: "Float64".to_string(),
-                right_type: "Float64".to_string(),
-            });
+            return Err(VectrillError::PhysicalExpression(
+                ExpressionError::InvalidOperation {
+                    op: "subtract".to_string(),
+                    left_type: "Float64".to_string(),
+                    right_type: "Float64".to_string(),
+                },
+            ));
         }
 
         Ok(Float64Array::from(result))
@@ -248,11 +251,13 @@ impl VectorizedOps {
                 result.push(left.value(i) * right_val);
             }
         } else {
-            Err::<ArrayRef, _>(ExpressionError::InvalidOperation {
-                op: "multiply".to_string(),
-                left_type: "Int64".to_string(),
-                right_type: "Int64".to_string(),
-            });
+            return Err(VectrillError::PhysicalExpression(
+                ExpressionError::InvalidOperation {
+                    op: "multiply".to_string(),
+                    left_type: "Int64".to_string(),
+                    right_type: "Int64".to_string(),
+                },
+            ));
         }
 
         Ok(Int64Array::from(result))
@@ -278,11 +283,13 @@ impl VectorizedOps {
                 result.push(left.value(i) * right_val);
             }
         } else {
-            Err::<ArrayRef, _>(ExpressionError::InvalidOperation {
-                op: "multiply".to_string(),
-                left_type: "Float64".to_string(),
-                right_type: "Float64".to_string(),
-            });
+            return Err(VectrillError::PhysicalExpression(
+                ExpressionError::InvalidOperation {
+                    op: "multiply".to_string(),
+                    left_type: "Float64".to_string(),
+                    right_type: "Float64".to_string(),
+                },
+            ));
         }
 
         Ok(Float64Array::from(result))
@@ -299,11 +306,13 @@ impl VectorizedOps {
                 if right_val != 0 {
                     result.push(left.value(i) / right_val);
                 } else {
-                    Err::<ArrayRef, _>(ExpressionError::InvalidOperation {
-                        op: "divide".to_string(),
-                        left_type: "Int64".to_string(),
-                        right_type: "Int64".to_string(),
-                    });
+                    return Err(VectrillError::PhysicalExpression(
+                        ExpressionError::InvalidOperation {
+                            op: "divide".to_string(),
+                            left_type: "Int64".to_string(),
+                            right_type: "Int64".to_string(),
+                        },
+                    ));
                 }
             }
         } else if left.len() == 1 {
@@ -313,11 +322,13 @@ impl VectorizedOps {
                 if right_val != 0 {
                     result.push(left_val / right_val);
                 } else {
-                    Err::<ArrayRef, _>(ExpressionError::InvalidOperation {
-                        op: "divide".to_string(),
-                        left_type: "Int64".to_string(),
-                        right_type: "Int64".to_string(),
-                    });
+                    return Err(VectrillError::PhysicalExpression(
+                        ExpressionError::InvalidOperation {
+                            op: "divide".to_string(),
+                            left_type: "Int64".to_string(),
+                            right_type: "Int64".to_string(),
+                        },
+                    ));
                 }
             }
         } else if right.len() == 1 {
@@ -327,18 +338,22 @@ impl VectorizedOps {
                     result.push(left.value(i) / right_val);
                 }
             } else {
-                Err::<ArrayRef, _>(ExpressionError::InvalidOperation {
+                return Err(VectrillError::PhysicalExpression(
+                    ExpressionError::InvalidOperation {
+                        op: "divide".to_string(),
+                        left_type: "Int64".to_string(),
+                        right_type: "Int64".to_string(),
+                    },
+                ));
+            }
+        } else {
+            return Err(VectrillError::PhysicalExpression(
+                ExpressionError::InvalidOperation {
                     op: "divide".to_string(),
                     left_type: "Int64".to_string(),
                     right_type: "Int64".to_string(),
-                });
-            }
-        } else {
-            Err::<ArrayRef, _>(ExpressionError::InvalidOperation {
-                op: "divide".to_string(),
-                left_type: "Int64".to_string(),
-                right_type: "Int64".to_string(),
-            });
+                },
+            ));
         }
 
         Ok(Int64Array::from(result))
@@ -355,11 +370,13 @@ impl VectorizedOps {
                 if right_val != 0.0 {
                     result.push(left.value(i) / right_val);
                 } else {
-                    Err::<ArrayRef, _>(ExpressionError::InvalidOperation {
-                        op: "divide".to_string(),
-                        left_type: "Float64".to_string(),
-                        right_type: "Float64".to_string(),
-                    });
+                    return Err(VectrillError::PhysicalExpression(
+                        ExpressionError::InvalidOperation {
+                            op: "divide".to_string(),
+                            left_type: "Float64".to_string(),
+                            right_type: "Float64".to_string(),
+                        },
+                    ));
                 }
             }
         } else if left.len() == 1 {
@@ -369,11 +386,13 @@ impl VectorizedOps {
                 if right_val != 0.0 {
                     result.push(left_val / right_val);
                 } else {
-                    Err::<ArrayRef, _>(ExpressionError::InvalidOperation {
-                        op: "divide".to_string(),
-                        left_type: "Float64".to_string(),
-                        right_type: "Float64".to_string(),
-                    });
+                    return Err(VectrillError::PhysicalExpression(
+                        ExpressionError::InvalidOperation {
+                            op: "divide".to_string(),
+                            left_type: "Float64".to_string(),
+                            right_type: "Float64".to_string(),
+                        },
+                    ));
                 }
             }
         } else if right.len() == 1 {
@@ -383,18 +402,22 @@ impl VectorizedOps {
                     result.push(left.value(i) / right_val);
                 }
             } else {
-                Err::<ArrayRef, _>(ExpressionError::InvalidOperation {
+                return Err(VectrillError::PhysicalExpression(
+                    ExpressionError::InvalidOperation {
+                        op: "divide".to_string(),
+                        left_type: "Float64".to_string(),
+                        right_type: "Float64".to_string(),
+                    },
+                ));
+            }
+        } else {
+            return Err(VectrillError::PhysicalExpression(
+                ExpressionError::InvalidOperation {
                     op: "divide".to_string(),
                     left_type: "Float64".to_string(),
                     right_type: "Float64".to_string(),
-                });
-            }
-        } else {
-            Err::<ArrayRef, _>(ExpressionError::InvalidOperation {
-                op: "divide".to_string(),
-                left_type: "Float64".to_string(),
-                right_type: "Float64".to_string(),
-            });
+                },
+            ));
         }
 
         Ok(Float64Array::from(result))
@@ -443,9 +466,9 @@ impl VectorizedOps {
             }
             DataType::Float64 => Ok(array.clone()),
             _ => Err(VectrillError::ExpressionError(format!(
-                "Type mismatch: expected {}, actual {}",
-                "Int64 or Float64".to_string(),
-                format!("{:?}", array.data_type())
+                "Type mismatch: expected {}, actual {:?}",
+                "Int64 or Float64",
+                array.data_type()
             ))),
         }
     }

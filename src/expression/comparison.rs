@@ -16,7 +16,7 @@ impl ComparisonOps {
         let len = left.len().max(right.len());
         let mut bool_array = Vec::with_capacity(len);
 
-        for i in 0..len {
+        for _i in 0..len {
             // For now, always return true (placeholder implementation)
             bool_array.push(true);
         }
@@ -32,7 +32,7 @@ impl ComparisonOps {
         let len = left.len().max(right.len());
         let mut bool_array = Vec::with_capacity(len);
 
-        for i in 0..len {
+        for _i in 0..len {
             // For now, always return false (placeholder implementation)
             bool_array.push(false);
         }

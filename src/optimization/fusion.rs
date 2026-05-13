@@ -259,6 +259,7 @@ impl FusedOperator {
     }
 
     /// Mark all expressions used by a given expression
+    #[allow(clippy::only_used_in_recursion)]
     fn mark_used(expr: &Expr, used: &mut HashSet<usize>) {
         match expr {
             Expr::Binary { left, right, .. } => {
@@ -348,7 +349,7 @@ impl FusedOperator {
                     .dependencies
                     .iter()
                     .enumerate()
-                    .map(|(i, &dep_id)| {
+                    .map(|(i, &_dep_id)| {
                         let name = format!("dep_{}", i);
                         let data_type = dependency_arrays[i].data_type().clone();
                         arrow::datatypes::Field::new(name, data_type, true)

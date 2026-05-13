@@ -5,8 +5,7 @@ use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
 use super::{global_registry, Expr, Operator, ScalarValue, UnaryOp};
-use arrow::array::{BooleanArray, Float64Array, Int64Array};
-use arrow::compute;
+use arrow::array::{Float64Array, Int64Array};
 
 /// Expression evaluation errors
 #[derive(Debug, Error)]
@@ -120,6 +119,12 @@ pub struct ExpressionCounters {
     pub evaluations: std::sync::atomic::AtomicU64,
     pub cache_hits: std::sync::atomic::AtomicU64,
     pub cache_misses: std::sync::atomic::AtomicU64,
+}
+
+impl Default for ExpressionCounters {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ExpressionCounters {
@@ -688,12 +693,7 @@ impl PhysicalExpr for BinaryExpr {
                     }
                 }
             }
-            Operator::Div => {
-                match crate::expression::ArithmeticOps::divide(&left_array, &right_array) {
-                    Ok(result) => result,
-                    Err(e) => return Err(e.into()),
-                }
-            }
+            Operator::Div => crate::expression::ArithmeticOps::divide(&left_array, &right_array)?,
 
             // Boolean operations
             Operator::And => {
