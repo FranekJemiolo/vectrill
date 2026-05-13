@@ -49,7 +49,6 @@ axum = { version = "0.7", features = ["ws"], optional = true }
 tower = { version = "0.4", optional = true }
 tower-http = { version = "0.5", features = ["cors"], optional = true }
 futures = { version = "0.3", optional = true }
-rdkafka = "0.36"
 clap = { version = "4.0", features = ["derive"] }
 tracing = "0.1"
 
