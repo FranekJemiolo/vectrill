@@ -132,7 +132,7 @@ impl BufferPool {
 
     /// Cleanup old buffers to free memory
     fn cleanup_old_buffers(&self, pools: &mut HashMap<DataType, VecDeque<ArrayRef>>) {
-        for (_, pool) in pools.iter_mut() {
+        for pool in pools.values_mut() {
             // Remove buffers that haven't been used recently (keep half)
             let keep_count = (pool.len() / 2).max(1);
             while pool.len() > keep_count {

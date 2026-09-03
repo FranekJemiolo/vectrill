@@ -419,7 +419,7 @@ impl ExecutionGraph {
                 )])))
             }
 
-            PhysicalPlan::Project { columns: _, .. } => {
+            PhysicalPlan::Project { .. } => {
                 // Create a projection operator - simplified implementation
                 Ok(Box::new(PassThroughOperator::new("projection".to_string())))
             }

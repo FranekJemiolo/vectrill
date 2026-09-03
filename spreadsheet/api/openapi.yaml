@@ -433,7 +433,7 @@ components:
         - type: boolean
           description: Boolean value
         - type: string
-          enum: [null]
+          nullable: true
           description: Empty value
 
     DataType:

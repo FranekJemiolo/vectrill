@@ -122,7 +122,6 @@ required-features = ["spreadsheet"]
 # Benchmarks
 [[test]]
 name = "e2e_advanced_features"
-harness = false
 required-features = ["performance"]
 
 [[test]]

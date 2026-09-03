@@ -2,7 +2,6 @@
 //!
 //! Provides HTTP API endpoints for spreadsheet integration with Vectrill.
 
-use std::sync::Arc;
 use vectrill::metrics::global_registry;
 use vectrill::web::run_server;
 

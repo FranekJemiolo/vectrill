@@ -133,7 +133,7 @@ jobs:
       - name: Validate OpenAPI specification
         run: |
           cd spreadsheet
-          npx @apidevtools/swagger-parser validate api/openapi.yaml
+          node -e 'require("@apidevtools/swagger-parser").validate("api/openapi.yaml").then(() => console.log("OpenAPI specification is valid")).catch(err => { console.error(err); process.exit(1); })'
 
       - name: Build API server
         run: cargo build --features spreadsheet --bin vectrill-api
@@ -221,7 +221,8 @@ jobs:
       - name: Generate API documentation
         run: |
           cd spreadsheet
-          npx swagger-codegen generate -i api/openapi.yaml -l html2 -o docs/
+          mkdir -p docs
+          npx -y @redocly/cli build-docs api/openapi.yaml -o docs/index.html
 
       - name: Upload documentation
         uses: actions/upload-artifact@v4
