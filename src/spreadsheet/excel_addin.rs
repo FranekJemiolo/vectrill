@@ -10,6 +10,7 @@ use crate::error::Result;
 #[cfg(windows)]
 pub struct ExcelAddin {
     /// COM application instance
+    #[allow(dead_code)]
     app: Option<windows::core::IUnknown>,
 }
 
