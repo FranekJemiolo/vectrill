@@ -15,97 +15,52 @@ The benchmark suite tests common DataFrame operations including:
 
 ## Files
 
-- `benchmark_comparison.py` - Main comprehensive benchmark script
-- `benchmark_quick.py` - Quick test with smaller datasets
-- `benchmark_test.py` - Basic functionality test
-- `benchmark_requirements.txt` - Additional dependencies for visualizations
+- `benchmarks/benchmark_quick.py` - Core micro-benchmark measuring 1K, 10K, 100K, and 1M row workloads
+- `benchmarks/realistic_use_case_benchmark.py` - End-to-end streaming workflows (IoT, fraud detection, session analytics)
+- `benchmarks/streaming_benchmark.py` - Micro-benchmarks for streaming and windowing operations
+- `benchmarks/performance_analysis.py` - Detailed operator analysis
 - `BENCHMARK_README.md` - This documentation
 
 ## Installation
 
-1. Install the main vectrill package with its dependencies:
+Using `uv` with Python 3.12 (recommended):
 ```bash
-cd vectrill
-pip install -e .
-```
+# Create and activate Python 3.12 virtual environment
+uv venv .venv --python 3.12
+source .venv/bin/activate
 
-2. Install benchmark-specific dependencies:
-```bash
-pip install -r benchmark_requirements.txt
+# Install Vectrill in editable mode along with benchmark dependencies
+uv pip install -e . pandas polars pyarrow pytest numpy
 ```
 
 ## Usage
 
-### Quick Test
-Run a quick test to verify everything works:
+### Micro-Benchmark (1K to 1M rows)
+Run the comparative micro-benchmark across Pandas, Polars, and Vectrill:
 ```bash
-python benchmark_quick.py
+python benchmarks/benchmark_quick.py
 ```
 
-### Full Benchmark
-Run the complete benchmark suite:
+This will test:
+- Data sizes: 1,000, 10,000, 100,000, and 1,000,000 rows
+- Core operations: `filter`, `groupby_sum`, `with_column`, and `sort`
+- Libraries: Pandas, Polars, and Vectrill
+
+### Realistic Streaming Benchmark
+Run end-to-end streaming use cases comparing throughput and memory consumption:
 ```bash
-python benchmark_comparison.py
+python benchmarks/realistic_use_case_benchmark.py
 ```
-
-This will:
-- Test all three libraries (pandas, polars, vectrill)
-- Use data sizes: 1K, 10K, 100K, 1M rows
-- Test all operations listed above
-- Generate:
-  - `benchmark_results.json` - Detailed results
-  - `benchmark_visualizations.png` - Performance charts
-  - Console report with summary statistics
-
-### Custom Benchmark
-You can modify the benchmark by editing `benchmark_comparison.py`:
-- Change data sizes in `self.data_sizes`
-- Add/remove operations in `self.operations`
-- Modify test data generation in `generate_test_data()`
-
-## Results
-
-The benchmark generates several outputs:
-
-### Console Report
-Real-time progress and final summary showing:
-- Execution times for each operation
-- Speedup comparisons between libraries
-- Overall performance statistics
-
-### JSON Results
-`benchmark_results.json` contains:
-- Detailed timing data for each test
-- Library version information
-- Error messages for failed tests
-- Structured data for further analysis
-
-### Visualizations
-`benchmark_visualizations.png` includes:
-- Performance comparison by data size
-- Performance comparison by operation type
-- Scalability plots (time vs data size)
-- Heatmap of operation performance
 
 ## Current Status
 
-### ✅ Implemented Operations
-- Data creation
-- Filtering (`value > 0`)
-- Groupby aggregations (sum, mean, multiple aggregations)
-- Column selection
-- Adding computed columns
-- Basic sorting (pandas, polars only)
-- Basic joining (pandas, polars only)
-- Concatenation (pandas, polars only)
-
-### 🚧 Limited Implementation (Vectrill)
-Some operations are not yet fully implemented in Vectrill:
-- Sorting operations
-- Join operations  
-- Concatenation operations
-
-These operations will show as "not implemented" in the results.
+### ✅ Implemented Operations (Vectrill)
+- **Data Ingestion**: Zero-copy conversions between PyArrow Tables/RecordBatches and Pandas/Polars
+- **Vectorized Filtering**: Comparison operators (`>`, `<`, `==`, `!=`, `>=`, `<=`) executed via SIMD Arrow compute kernels
+- **Column Derivations**: Arithmetic (`+`, `-`, `*`, `/`, `**`) and string/math functions (`abs`, `round`, `floor`, `ceil`, `length`, `upper`) via zero-copy column updates
+- **Groupby Aggregations**: Arrow Acero table aggregations (`sum`, `mean`, `min`, `max`, `count`, and multi-agg)
+- **Sorting**: Multi-column sorting (`sort`) via Arrow compute `sort_indices` and `take`
+- **Streaming Sequencer**: Ingestion and monotonic event re-sequencing achieving up to 41.80M rows/s
 
 ## Hardware Environment & Benchmark Run
 
