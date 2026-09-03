@@ -9,7 +9,7 @@ import pandas as pd
 import polars as pl
 
 # Add vectrill to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'python'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'python')))
 
 try:
     from vectrill.dataframe import VectrillDataFrame, col, functions
@@ -56,7 +56,7 @@ try:
     filtered_polars = polars_df.filter(pl.col('value1') > 5)
     print(f"  Filter: {len(filtered_polars)} rows")
     
-    grouped_polars = polars_df.groupby('group').agg(pl.col('value1').sum())
+    grouped_polars = polars_df.group_by('group').agg(pl.col('value1').sum())
     print(f"  Groupby: {len(grouped_polars)} groups")
     
     with_col_polars = polars_df.with_columns((pl.col('value1') * 2).alias('new_col'))
