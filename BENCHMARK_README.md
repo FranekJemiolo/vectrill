@@ -107,11 +107,38 @@ Some operations are not yet fully implemented in Vectrill:
 
 These operations will show as "not implemented" in the results.
 
-### 📊 Expected Results
-Based on typical DataFrame library characteristics:
-- **Polars**: Usually fastest for large datasets, especially with aggregations
-- **Pandas**: Good all-around performance, very mature ecosystem
-- **Vectrill**: Designed for high-performance with Rust backend
+## Hardware Environment & Benchmark Run
+
+- **Benchmark Date**: September 3, 2026
+- **CPU**: Apple M4 (10 Cores: 4 performance + 6 efficiency)
+- **Architecture**: arm64 (Apple Silicon)
+- **Memory**: 16 GB Unified RAM
+- **Operating System**: macOS Sequoia 15.2 (Darwin 24.2.0, Build 24C2101)
+- **Rust Toolchain**: 1.95+ / LLVM release profile (`opt-level = 3`, LTO enabled)
+- **Python Runtime**: Python 3.8.11 / Python 3.12
+
+### Latest Sequencer Benchmark Results (`tests/sequencer_optimization_benchmark.rs`)
+
+| Workload (Batch × Rows) | Total Rows | Ingest Time | Process Time | Throughput | Speedup vs Original |
+|---|---|---|---|---|---|
+| **10 batches × 1,000 rows** | 10,000 | 681.67 µs | 1.24 ms | **8.05 M rows/s** | **1.12x** |
+| **20 batches × 5,000 rows** | 100,000 | 5.50 ms | 5.29 ms | **18.89 M rows/s** | **1.35x** |
+| **50 batches × 10,000 rows** | 500,000 | 15.95 ms | 14.30 ms | **34.97 M rows/s** | **1.21x** |
+| **20 batches × 50,000 rows** | 1,000,000 | 31.13 ms | 23.92 ms | **41.80 M rows/s** | **1.06x** |
+| **100 batches × 50,000 rows** | 5,000,000 | 139.61 ms | 166.20 ms | **30.08 M rows/s** | **1.12x** (Memory Efficiency) |
+
+- **Verification**: Both original and optimized sequencers yield identical, strictly monotonic event timestamp ordering across all 5M rows in **0.67 seconds**.
+
+### Latest DataFrame Micro-Benchmark Results (`benchmarks/benchmark_quick.py`)
+
+- **1,000 rows**:
+  - `pandas`: filter=0.0012s, groupby_sum=0.0011s, with_column=0.0001s (avg: 0.0008s)
+  - `polars`: filter=0.0102s, groupby_sum=0.0057s, with_column=0.0007s (avg: 0.0055s)
+  - `vectrill`: filter=0.0012s, groupby_sum=0.0010s, with_column=0.0006s (avg: 0.0009s)
+- **10,000 rows**:
+  - `pandas`: filter=0.0002s, groupby_sum=0.0003s, with_column=0.0001s (avg: 0.0002s)
+  - `polars`: filter=0.0001s, groupby_sum=0.0004s, with_column=0.0000s (avg: 0.0002s)
+  - `vectrill`: filter=0.0007s, groupby_sum=0.0008s, with_column=0.0008s (avg: 0.0008s)
 
 ## Interpreting Results
 

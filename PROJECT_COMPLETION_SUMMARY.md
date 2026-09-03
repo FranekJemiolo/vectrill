@@ -60,11 +60,29 @@
 - **API Completeness**: Full pandas-like DataFrame API with Arrow compute backend
 - **Documentation**: Comprehensive README, benchmarks, and inline documentation
 
-**Performance**
-- **Sequencer Throughput**: 30.3M to 43.2M rows/second in release benchmarks
-- **Functionality**: 100% pandas parity for core operations
-- **Scalability**: Zero-copy Arrow memory kernels eliminate per-row string/scalar allocation
-- **Memory Efficiency**: Pruned exhausted cursors/batches, eliminating monotonic memory growth
+**Performance & Benchmark Results**
+- **Test Date**: September 3, 2026
+- **Hardware Environment**:
+  - **CPU**: Apple M4 (10 Cores: 4 performance + 6 efficiency)
+  - **Architecture**: arm64 (Apple Silicon)
+  - **Memory**: 16 GB Unified RAM
+  - **Operating System**: macOS Sequoia 15.2 (Darwin 24.2.0, Build 24C2101)
+  - **Compiler**: Rust 1.95+ / LLVM release profile (`opt-level = 3`, LTO enabled)
+
+#### Sequencer Throughput & Efficiency (Release Profile)
+Benchmark run on `tests/sequencer_optimization_benchmark.rs`:
+
+| Workload (Batch × Rows) | Total Rows | Ingest Time | Process Time | Throughput | Speedup vs Original |
+|---|---|---|---|---|---|
+| **10 batches × 1,000 rows** | 10,000 | 681.67 µs | 1.24 ms | **8.05 M rows/s** | **1.12x** |
+| **20 batches × 5,000 rows** | 100,000 | 5.50 ms | 5.29 ms | **18.89 M rows/s** | **1.35x** |
+| **50 batches × 10,000 rows** | 500,000 | 15.95 ms | 14.30 ms | **34.97 M rows/s** | **1.21x** |
+| **20 batches × 50,000 rows** | 1,000,000 | 31.13 ms | 23.92 ms | **41.80 M rows/s** | **1.06x** |
+| **100 batches × 50,000 rows** | 5,000,000 | 139.61 ms | 166.20 ms | **30.08 M rows/s** | **1.12x** (Memory Efficiency) |
+
+- **Correctness**: 100% identical ordering between sequencers verified in **0.67s** total execution time.
+- **Scalability**: Zero-copy Arrow memory kernels eliminate per-row string/scalar allocation.
+- **Memory Efficiency**: Pruned exhausted cursors/batches, eliminating monotonic memory growth.
 
 ### 🎯 Key Technical Solutions
 
