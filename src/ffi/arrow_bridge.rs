@@ -10,19 +10,13 @@ use pyo3::prelude::*;
 /// For now, we provide a basic structure that can be extended
 
 #[cfg(feature = "python")]
-pub fn export_batch_to_python(
+pub fn export_batch_to_python<'py>(
     _batch: &crate::RecordBatch,
-    py: Python,
-) -> PyResult<(PyObject, PyObject)> {
-    // Placeholder implementation for M2
-    // In a full implementation, this would use Arrow C Data Interface
-    // For now, we return simple Python objects that can be used for testing
-
-    use std::ffi::CString;
-    let array_data = py.eval(CString::new("None").unwrap().as_c_str(), None, None)?;
-    let schema_data = py.eval(CString::new("None").unwrap().as_c_str(), None, None)?;
-
-    Ok((array_data.into(), schema_data.into()))
+    py: Python<'py>,
+) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+    let none1 = py.None().into_bound(py);
+    let none2 = py.None().into_bound(py);
+    Ok((none1, none2))
 }
 
 #[cfg(feature = "python")]

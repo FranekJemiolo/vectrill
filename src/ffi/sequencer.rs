@@ -92,11 +92,12 @@ impl PySequencer {
     }
 
     /// Get the next ordered batch as Arrow C Data Interface
-    fn next_batch(&mut self, py: Python) -> PyResult<Option<PyObject>> {
+    fn next_batch<'py>(&mut self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
         if let Some(batch) = self.inner.next_batch() {
             let (array, schema) = export_batch_to_python(&batch, py)?;
             // Return a tuple (array, schema) representing the Arrow C Data Interface
-            Ok(Some((array, schema).into_pyobject(py)?.into()))
+            let tuple = pyo3::types::PyTuple::new(py, &[array, schema])?;
+            Ok(Some(tuple.into_any()))
         } else {
             Ok(None)
         }
@@ -115,10 +116,11 @@ impl PySequencer {
     }
 
     /// Force flush any buffered data
-    fn flush(&mut self, py: Python) -> PyResult<Option<PyObject>> {
+    fn flush<'py>(&mut self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
         if let Some(batch) = self.inner.next_batch() {
             let (array, schema) = export_batch_to_python(&batch, py)?;
-            Ok(Some((array, schema).into_pyobject(py)?.into()))
+            let tuple = pyo3::types::PyTuple::new(py, &[array, schema])?;
+            Ok(Some(tuple.into_any()))
         } else {
             Ok(None)
         }
@@ -126,7 +128,7 @@ impl PySequencer {
 
     /// Create a default configuration dictionary
     #[staticmethod]
-    fn default_config(py: Python) -> PyResult<PyObject> {
+    fn default_config<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let config = PyDict::new(py);
 
         config.set_item("ordering", "by_timestamp")?;
@@ -135,7 +137,7 @@ impl PySequencer {
         config.set_item("batch_size", 1000usize)?;
         config.set_item("flush_interval_ms", 100i64)?;
 
-        Ok(config.into())
+        Ok(config)
     }
 
     /// Get a string representation
