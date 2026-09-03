@@ -25,9 +25,9 @@ def quick_benchmark():
     """Run quick benchmark with smaller dataset"""
     print("Running quick benchmark test...")
     
-    # Smaller dataset for quick testing
-    data_sizes = [1000, 10000]
-    operations = ['filter', 'groupby_sum', 'with_column']
+    # Dataset sizes up to 1M
+    data_sizes = [1000, 10000, 100000, 1000000]
+    operations = ['filter', 'groupby_sum', 'with_column', 'sort']
     libraries = ['pandas', 'polars']
     if VECTRILL_AVAILABLE:
         libraries.append('vectrill')
@@ -50,7 +50,7 @@ def quick_benchmark():
         polars_df = pl.DataFrame(data)
         
         for library in libraries:
-            print(f"  {library}: ", end='')
+            print(f"  {library}: ", end='', flush=True)
             
             # Get appropriate dataframe
             if library == 'pandas':
@@ -90,10 +90,18 @@ def quick_benchmark():
                         elif library == 'vectrill':
                             result = df.with_column(col('value1') * 2, 'new_col')
                     
+                    elif operation == 'sort':
+                        if library == 'pandas':
+                            result = df.sort_values('value1')
+                        elif library == 'polars':
+                            result = df.sort('value1')
+                        elif library == 'vectrill':
+                            result = df.sort('value1')
+                    
                     end_time = time.perf_counter()
                     exec_time = end_time - start_time
                     library_results.append(exec_time)
-                    print(f"{operation}={exec_time:.4f}s ", end='')
+                    print(f"{operation}={exec_time:.4f}s ", end='', flush=True)
                     
                 except Exception as e:
                     print(f"{operation}=ERROR({str(e)[:20]}...) ", end='')

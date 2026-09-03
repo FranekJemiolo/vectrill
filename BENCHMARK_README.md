@@ -131,14 +131,39 @@ These operations will show as "not implemented" in the results.
 
 ### Latest DataFrame Micro-Benchmark Results (`benchmarks/benchmark_quick.py`)
 
-- **1,000 rows**:
-  - `pandas`: filter=0.0012s, groupby_sum=0.0011s, with_column=0.0001s (avg: 0.0008s)
-  - `polars`: filter=0.0102s, groupby_sum=0.0057s, with_column=0.0007s (avg: 0.0055s)
-  - `vectrill`: filter=0.0012s, groupby_sum=0.0010s, with_column=0.0006s (avg: 0.0009s)
-- **10,000 rows**:
-  - `pandas`: filter=0.0002s, groupby_sum=0.0003s, with_column=0.0001s (avg: 0.0002s)
-  - `polars`: filter=0.0001s, groupby_sum=0.0004s, with_column=0.0000s (avg: 0.0002s)
-  - `vectrill`: filter=0.0007s, groupby_sum=0.0008s, with_column=0.0008s (avg: 0.0008s)
+*Benchmarked on Apple M4 (10 Cores), 16 GB Unified RAM, macOS Sequoia 15.2 (arm64), September 3, 2026*
+
+#### 1,000 Rows
+| Library | Filter | GroupBy Sum | With Column | Sort | Average |
+|---|---|---|---|---|---|
+| **Pandas** | 0.0017s | 0.0015s | 0.0002s | 0.0003s | 0.0009s |
+| **Polars** | 0.0110s | 0.0087s | 0.0013s | 0.0009s | 0.0055s |
+| **Vectrill** | 0.0046s | 0.0198s | 0.0003s | 0.0007s | 0.0063s |
+
+#### 10,000 Rows
+| Library | Filter | GroupBy Sum | With Column | Sort | Average |
+|---|---|---|---|---|---|
+| **Pandas** | 0.0003s | 0.0005s | 0.0002s | 0.0006s | 0.0004s |
+| **Polars** | 0.0002s | 0.0004s | 0.0000s | 0.0004s | 0.0003s |
+| **Vectrill** | **0.0001s** ⚡ | **0.0002s** ⚡ | **0.0000s** ⚡ | 0.0005s | **0.0002s** 🏆 |
+
+#### 100,000 Rows
+| Library | Filter | GroupBy Sum | With Column | Sort | Average |
+|---|---|---|---|---|---|
+| **Pandas** | 0.0009s | 0.0017s | 0.0005s | 0.0073s | 0.0026s |
+| **Polars** | 0.0006s | 0.0009s | 0.0001s | 0.0016s | **0.0008s** |
+| **Vectrill** | **0.0005s** ⚡ | **0.0009s** ⚡ | **0.0001s** ⚡ | 0.0068s | 0.0021s |
+
+#### 1,000,000 Rows
+| Library | Filter | GroupBy Sum | With Column | Sort | Average |
+|---|---|---|---|---|---|
+| **Pandas** | 0.0091s | 0.0153s | 0.0050s | 0.0863s | 0.0289s |
+| **Polars** | 0.0070s | 0.0029s | 0.0008s | 0.0191s | **0.0074s** |
+| **Vectrill** | **0.0044s** ⚡ | 0.0066s | **0.0004s** ⚡ | 0.0847s | 0.0240s |
+
+- **Filtering at 1M Rows**: Vectrill (**0.0044s**) is **2.1x faster than Pandas** (0.0091s) and **1.6x faster than Polars** (0.0070s).
+- **Column Operations at 1M Rows**: Vectrill (**0.0004s**) is **12.5x faster than Pandas** (0.0050s) and **2.0x faster than Polars** (0.0008s).
+- **GroupBy Aggregations at 1M Rows**: Vectrill (**0.0066s**) is **2.3x faster than Pandas** (0.0153s).
 
 ## Interpreting Results
 
