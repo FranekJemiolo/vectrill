@@ -55,6 +55,15 @@ impl FilterOperator {
                 VectrillError::ExpressionError("Predicate must return boolean array".to_string())
             })?;
 
+        // Short-circuit fast paths using bitmask popcount
+        let true_count = mask.true_count();
+        if true_count == batch.num_rows() {
+            return Ok(batch.clone());
+        }
+        if true_count == 0 {
+            return Ok(RecordBatch::new_empty(batch.schema()));
+        }
+
         // Apply the filter using Arrow compute kernel
         let filtered_batch = arrow::compute::filter_record_batch(batch, mask)
             .map_err(|e| VectrillError::ArrowError(e.to_string()))?;

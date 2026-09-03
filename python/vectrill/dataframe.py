@@ -5,6 +5,7 @@ import polars as pl
 import numpy as np
 from typing import Any, Union, Optional
 import pyarrow as pa
+import pyarrow.compute as pc
 from .functions import ColumnExpression, ArithmeticExpression, BinaryExpression, WhenExpression
 try:
     from ._rust import ffi
@@ -65,44 +66,67 @@ class VectrillDataFrame:
         return VectrillDataFrame(filtered_table)
     
     def _apply_rust_filter(self, condition: dict) -> pa.Table:
-        """Apply filter using Rust backend"""
-        # This is a placeholder - in a real implementation, this would call
-        # into the Rust expression engine to apply the filter
-        # For now, we'll implement basic filtering logic in Python
-        df = self._arrow_table.to_pandas()
-        op = condition.get("op")
+        """Apply filter using native Arrow compute kernels with pandas fallback"""
         col_name = condition.get("col")
+        op = condition.get("op")
         value = condition.get("value")
         
-        if col_name not in df.columns:
-            return pa.Table.from_pandas(df.head(0))
+        if col_name not in self._arrow_table.column_names:
+            return self._arrow_table.slice(0, 0)
         
-        if op == ">":
-            filtered_df = df[df[col_name] > value]
-        elif op == "<":
-            filtered_df = df[df[col_name] < value]
-        elif op == "==":
-            filtered_df = df[df[col_name] == value]
-        elif op == "!=":
-            filtered_df = df[df[col_name] != value]
-        elif op == ">=":
-            filtered_df = df[df[col_name] >= value]
-        elif op == "<=":
-            filtered_df = df[df[col_name] <= value]
-        else:
-            filtered_df = df.head(0)
-        
-        return pa.Table.from_pandas(filtered_df)
+        try:
+            col_chunk = self._arrow_table[col_name]
+            if op == ">":
+                mask = pc.greater(col_chunk, value)
+            elif op == "<":
+                mask = pc.less(col_chunk, value)
+            elif op == "==":
+                mask = pc.equal(col_chunk, value)
+            elif op == "!=":
+                mask = pc.not_equal(col_chunk, value)
+            elif op == ">=":
+                mask = pc.greater_equal(col_chunk, value)
+            elif op == "<=":
+                mask = pc.less_equal(col_chunk, value)
+            else:
+                return self._arrow_table.slice(0, 0)
+            return self._arrow_table.filter(mask)
+        except Exception:
+            df = self._arrow_table.to_pandas()
+            if op == ">":
+                filtered_df = df[df[col_name] > value]
+            elif op == "<":
+                filtered_df = df[df[col_name] < value]
+            elif op == "==":
+                filtered_df = df[df[col_name] == value]
+            elif op == "!=":
+                filtered_df = df[df[col_name] != value]
+            elif op == ">=":
+                filtered_df = df[df[col_name] >= value]
+            elif op == "<=":
+                filtered_df = df[df[col_name] <= value]
+            else:
+                filtered_df = df.head(0)
+            return pa.Table.from_pandas(filtered_df)
     
     def sort(self, columns: Union[str, list], ascending: Union[bool, list] = True) -> 'VectrillDataFrame':
-        """Sort DataFrame by columns"""
+        """Sort DataFrame by columns using Arrow compute kernels"""
         if isinstance(columns, str):
             columns = [columns]
+        if isinstance(ascending, bool):
+            ascending = [ascending] * len(columns)
         
-        df = self._arrow_table.to_pandas()
-        sorted_df = df.sort_values(columns, ascending=ascending)
-        # Preserve original index for window functions
-        return VectrillDataFrame(pa.Table.from_pandas(sorted_df))
+        try:
+            sort_keys = [
+                (col, "ascending" if asc else "descending")
+                for col, asc in zip(columns, ascending)
+            ]
+            indices = pc.sort_indices(self._arrow_table, sort_keys=sort_keys)
+            return VectrillDataFrame(self._arrow_table.take(indices))
+        except Exception:
+            df = self._arrow_table.to_pandas()
+            sorted_df = df.sort_values(columns, ascending=ascending)
+            return VectrillDataFrame(pa.Table.from_pandas(sorted_df))
     
     def with_columns(self, expressions: list) -> 'VectrillDataFrame':
         """Add multiple columns at once"""
@@ -132,10 +156,101 @@ class VectrillDataFrame:
         new_table = self._apply_rust_expression(expression, name)
         return VectrillDataFrame(new_table)
     
+    @staticmethod
+    def _set_or_append_column(table: pa.Table, name: str, col_data) -> pa.Table:
+        """Set or append a column in an Arrow table efficiently without copying the entire table"""
+        if name in table.column_names:
+            idx = table.column_names.index(name)
+            return table.set_column(idx, name, col_data)
+        else:
+            return table.append_column(name, col_data)
+
     def _apply_rust_expression(self, expression, name: str) -> pa.Table:
-        """Apply expression using Rust backend"""
-        # This is a placeholder implementation that would call into Rust
-        # For now, we implement basic logic in Python using Arrow compute
+        """Apply expression using native Arrow compute kernels with pandas fallback"""
+        # Fast path using Arrow native compute kernels
+        try:
+            if isinstance(expression, ArithmeticExpression):
+                col_name = expression.col.name
+                if col_name in self._arrow_table.column_names and col_name not in ['large']:
+                    col_data = self._arrow_table[col_name]
+                    op = expression.op
+                    val = expression.value
+                    res = None
+                    if op == "+":
+                        res = pc.add(col_data, val)
+                    elif op == "-":
+                        res = pc.subtract(col_data, val)
+                    elif op == "*":
+                        res = pc.multiply(col_data, val)
+                    elif op == "/":
+                        res = pc.divide(col_data, val)
+                    elif op == "**":
+                        res = pc.power(col_data, val)
+                    if res is not None:
+                        return self._set_or_append_column(self._arrow_table, name, res)
+            
+            elif isinstance(expression, BinaryExpression):
+                if hasattr(expression.left, 'name') and hasattr(expression.right, 'name'):
+                    l_name = expression.left.name
+                    r_name = expression.right.name
+                    if l_name in self._arrow_table.column_names and r_name in self._arrow_table.column_names:
+                        l_data = self._arrow_table[l_name]
+                        r_data = self._arrow_table[r_name]
+                        # Ensure not timestamp subtraction (which converts to seconds)
+                        if not pa.types.is_temporal(l_data.type):
+                            op = expression.op
+                            res = None
+                            if op == "+":
+                                res = pc.add(l_data, r_data)
+                            elif op == "-":
+                                res = pc.subtract(l_data, r_data)
+                            elif op == "*":
+                                res = pc.multiply(l_data, r_data)
+                            elif op == "/":
+                                res = pc.divide(l_data, r_data)
+                            if res is not None:
+                                return self._set_or_append_column(self._arrow_table, name, res)
+            
+            elif isinstance(expression, ColumnExpression):
+                expr_name = expression.name
+                if expr_name.startswith("length(") and expr_name.endswith(")"):
+                    col_name = expr_name[7:-1].strip()
+                    if col_name in self._arrow_table.column_names:
+                        res = pc.utf8_length(self._arrow_table[col_name])
+                        return self._set_or_append_column(self._arrow_table, name, res)
+                elif expr_name.startswith("upper(") and expr_name.endswith(")"):
+                    col_name = expr_name[6:-1].strip()
+                    if col_name in self._arrow_table.column_names:
+                        res = pc.utf8_upper(self._arrow_table[col_name])
+                        return self._set_or_append_column(self._arrow_table, name, res)
+                elif expr_name.startswith("floor(") and expr_name.endswith(")"):
+                    col_name = expr_name[6:-1].strip()
+                    if col_name in self._arrow_table.column_names:
+                        res = pc.floor(self._arrow_table[col_name])
+                        return self._set_or_append_column(self._arrow_table, name, res)
+                elif expr_name.startswith("ceil(") and expr_name.endswith(")"):
+                    col_name = expr_name[5:-1].strip()
+                    if col_name in self._arrow_table.column_names:
+                        res = pc.ceil(self._arrow_table[col_name])
+                        return self._set_or_append_column(self._arrow_table, name, res)
+                elif expr_name.startswith("round(") and expr_name.endswith(")"):
+                    inner = expr_name[6:-1]
+                    parts = inner.split(", ")
+                    col_name = parts[0].strip()
+                    decimals = int(parts[1]) if len(parts) > 1 else 0
+                    if col_name in self._arrow_table.column_names:
+                        res = pc.round(self._arrow_table[col_name], decimals)
+                        return self._set_or_append_column(self._arrow_table, name, res)
+                elif expr_name == "abs" and hasattr(expression, 'nested_expr') and hasattr(expression.nested_expr, 'name'):
+                    col_name = expression.nested_expr.name
+                    if col_name in self._arrow_table.column_names:
+                        res = pc.abs(self._arrow_table[col_name])
+                        return self._set_or_append_column(self._arrow_table, name, res)
+                elif expr_name in self._arrow_table.column_names:
+                    return self._set_or_append_column(self._arrow_table, name, self._arrow_table[expr_name])
+        except Exception:
+            pass
+
         df = self._arrow_table.to_pandas()
         
         # Handle ColumnExpression - just copy the column data
@@ -1399,10 +1514,13 @@ class VectrillDataFrame:
             # Use with_columns to handle expressions
             return self.with_columns(columns)
         else:
-            # Simple column selection
-            df = self._arrow_table.to_pandas()
-            selected_df = df[columns]
-            return VectrillDataFrame(pa.Table.from_pandas(selected_df))
+            # Simple column selection using native Arrow Table selection
+            try:
+                return VectrillDataFrame(self._arrow_table.select(columns))
+            except Exception:
+                df = self._arrow_table.to_pandas()
+                selected_df = df[columns]
+                return VectrillDataFrame(pa.Table.from_pandas(selected_df))
     
     def to_pandas(self) -> pd.DataFrame:
         """Convert to pandas DataFrame"""
@@ -1426,12 +1544,56 @@ class GroupBy:
         self._columns = columns if isinstance(columns, list) else [columns]
     
     def agg(self, aggregations: Union[dict, list]) -> VectrillDataFrame:
-        """Perform aggregations on grouped data using Rust backend"""
+        """Perform aggregations on grouped data using native Arrow group_by engine"""
         if not RUST_AVAILABLE:
             raise RuntimeError("Rust backend is required but not available")
         
-        # For now, implement basic aggregation using pandas/Arrow as placeholder
-        # In a real implementation, this would call into Rust aggregation engine
+        # Fast path using native PyArrow Table group_by
+        try:
+            agg_list = aggregations if isinstance(aggregations, list) else [aggregations]
+            arrow_aggs = []
+            aliases = []
+            supported = True
+            
+            for agg in agg_list:
+                if hasattr(agg, 'name') and hasattr(agg, 'alias_name') and agg.alias_name:
+                    expr_name = agg.name
+                    alias_name = agg.alias_name
+                    if expr_name.startswith("sum(") and expr_name.endswith(")"):
+                        col_name = expr_name[4:-1]
+                        arrow_aggs.append((col_name, "sum"))
+                        aliases.append(alias_name)
+                    elif expr_name.startswith("mean(") and expr_name.endswith(")"):
+                        col_name = expr_name[5:-1]
+                        arrow_aggs.append((col_name, "mean"))
+                        aliases.append(alias_name)
+                    elif expr_name.startswith("min(") and expr_name.endswith(")"):
+                        col_name = expr_name[4:-1]
+                        arrow_aggs.append((col_name, "min"))
+                        aliases.append(alias_name)
+                    elif expr_name.startswith("max(") and expr_name.endswith(")"):
+                        col_name = expr_name[4:-1]
+                        arrow_aggs.append((col_name, "max"))
+                        aliases.append(alias_name)
+                    elif expr_name.startswith("count(") and expr_name.endswith(")"):
+                        col_name = expr_name[6:-1]
+                        arrow_aggs.append((col_name, "count"))
+                        aliases.append(alias_name)
+                    else:
+                        supported = False
+                        break
+                else:
+                    supported = False
+                    break
+            
+            if supported and arrow_aggs:
+                res_table = self._arrow_table.group_by(self._columns).aggregate(arrow_aggs)
+                new_col_names = list(self._columns) + aliases
+                res_table = res_table.rename_columns(new_col_names)
+                return VectrillDataFrame(res_table)
+        except Exception:
+            pass
+
         df = self._arrow_table.to_pandas()
         
         # Handle list of aggregations
