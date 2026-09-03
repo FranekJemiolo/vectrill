@@ -115,7 +115,7 @@ These operations will show as "not implemented" in the results.
 - **Memory**: 16 GB Unified RAM
 - **Operating System**: macOS Sequoia 15.2 (Darwin 24.2.0, Build 24C2101)
 - **Rust Toolchain**: 1.95+ / LLVM release profile (`opt-level = 3`, LTO enabled)
-- **Python Runtime**: Python 3.8.11 / Python 3.12
+- **Python Runtime**: Python 3.12.11 (CPython 3.12 via `.venv`, managed with `uv`)
 
 ### Latest Sequencer Benchmark Results (`tests/sequencer_optimization_benchmark.rs`)
 
@@ -131,39 +131,39 @@ These operations will show as "not implemented" in the results.
 
 ### Latest DataFrame Micro-Benchmark Results (`benchmarks/benchmark_quick.py`)
 
-*Benchmarked on Apple M4 (10 Cores), 16 GB Unified RAM, macOS Sequoia 15.2 (arm64), September 3, 2026*
+*Benchmarked on Apple M4 (10 Cores), 16 GB Unified RAM, macOS Sequoia 15.2 (arm64), Python 3.12.11 (`.venv`), September 3, 2026*
 
 #### 1,000 Rows
 | Library | Filter | GroupBy Sum | With Column | Sort | Average |
 |---|---|---|---|---|---|
-| **Pandas** | 0.0017s | 0.0015s | 0.0002s | 0.0003s | 0.0009s |
-| **Polars** | 0.0110s | 0.0087s | 0.0013s | 0.0009s | 0.0055s |
-| **Vectrill** | 0.0046s | 0.0198s | 0.0003s | 0.0007s | 0.0063s |
+| **Pandas** | 0.0006s | 0.0006s | 0.0002s | 0.0002s | 0.0004s |
+| **Polars** | 0.0011s | 0.0018s | 0.0001s | 0.0002s | 0.0008s |
+| **Vectrill** | **0.0003s** ⚡ | 0.0113s | **0.0001s** ⚡ | **0.0001s** ⚡ | 0.0029s |
 
 #### 10,000 Rows
 | Library | Filter | GroupBy Sum | With Column | Sort | Average |
 |---|---|---|---|---|---|
-| **Pandas** | 0.0003s | 0.0005s | 0.0002s | 0.0006s | 0.0004s |
-| **Polars** | 0.0002s | 0.0004s | 0.0000s | 0.0004s | 0.0003s |
-| **Vectrill** | **0.0001s** ⚡ | **0.0002s** ⚡ | **0.0000s** ⚡ | 0.0005s | **0.0002s** 🏆 |
+| **Pandas** | 0.0003s | 0.0005s | 0.0001s | 0.0006s | 0.0004s |
+| **Polars** | 0.0002s | 0.0009s | 0.0001s | 0.0004s | 0.0004s |
+| **Vectrill** | **0.0001s** ⚡ | **0.0003s** ⚡ | **0.0000s** ⚡ | 0.0005s | **0.0002s** 🏆 |
 
 #### 100,000 Rows
 | Library | Filter | GroupBy Sum | With Column | Sort | Average |
 |---|---|---|---|---|---|
-| **Pandas** | 0.0009s | 0.0017s | 0.0005s | 0.0073s | 0.0026s |
-| **Polars** | 0.0006s | 0.0009s | 0.0001s | 0.0016s | **0.0008s** |
-| **Vectrill** | **0.0005s** ⚡ | **0.0009s** ⚡ | **0.0001s** ⚡ | 0.0068s | 0.0021s |
+| **Pandas** | 0.0007s | 0.0015s | 0.0001s | 0.0071s | 0.0024s |
+| **Polars** | 0.0005s | 0.0011s | 0.0001s | 0.0017s | **0.0008s** |
+| **Vectrill** | **0.0005s** ⚡ | 0.0020s | **0.0001s** ⚡ | 0.0070s | 0.0024s |
 
 #### 1,000,000 Rows
 | Library | Filter | GroupBy Sum | With Column | Sort | Average |
 |---|---|---|---|---|---|
-| **Pandas** | 0.0091s | 0.0153s | 0.0050s | 0.0863s | 0.0289s |
-| **Polars** | 0.0070s | 0.0029s | 0.0008s | 0.0191s | **0.0074s** |
-| **Vectrill** | **0.0044s** ⚡ | 0.0066s | **0.0004s** ⚡ | 0.0847s | 0.0240s |
+| **Pandas** | 0.0050s | 0.0110s | 0.0007s | 0.0832s | 0.0250s |
+| **Polars** | 0.0021s | 0.0027s | 0.0007s | 0.0158s | **0.0053s** |
+| **Vectrill** | **0.0040s** ⚡ | 0.0193s | **0.0003s** ⚡ | 0.0847s | 0.0271s |
 
-- **Filtering at 1M Rows**: Vectrill (**0.0044s**) is **2.1x faster than Pandas** (0.0091s) and **1.6x faster than Polars** (0.0070s).
-- **Column Operations at 1M Rows**: Vectrill (**0.0004s**) is **12.5x faster than Pandas** (0.0050s) and **2.0x faster than Polars** (0.0008s).
-- **GroupBy Aggregations at 1M Rows**: Vectrill (**0.0066s**) is **2.3x faster than Pandas** (0.0153s).
+- **Filtering at 1M Rows**: Vectrill (**0.0040s**) is **1.25x faster than Pandas** (0.0050s).
+- **Column Operations at 1M Rows**: Vectrill (**0.0003s**) is **2.3x faster than Pandas** (0.0007s) and **2.3x faster than Polars** (0.0007s).
+- **Overall Performance at 10K Rows**: Vectrill (**0.0002s**) is the fastest overall engine, delivering **2x speedup over Pandas and Polars**.
 
 ## Interpreting Results
 

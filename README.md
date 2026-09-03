@@ -755,7 +755,7 @@ Comprehensive benchmark results comparing Vectrill, pandas, and Polars across va
 **Test Environment:**
 - **Hardware**: Apple M4 (10 Cores: 4P + 6E), 16 GB Unified RAM
 - **Operating System**: macOS Sequoia 15.2 (arm64)
-- **Runtimes**: Python 3.8 / 3.12, Rust 1.95+
+- **Runtimes**: Python 3.12.11 (via `.venv`, managed with `uv`), Rust 1.95+
 - **Data sizes**: 1,000 to 1,000,000 rows
 - **Libraries**: Vectrill (native SIMD Arrow compute & streaming), pandas (batch), Polars (lazy)
 
@@ -764,38 +764,38 @@ Comprehensive benchmark results comparing Vectrill, pandas, and Polars across va
 #### 1,000 Rows Dataset
 | Operation | Pandas | Polars | Vectrill | Vectrill Advantage |
 |---|---|---|---|---|
-| Filter | 0.0017s | 0.0110s | **0.0046s** | **2.4x faster than Polars** |
-| GroupBy Sum | 0.0015s | 0.0087s | **0.0198s** | Cold start warmup |
-| With Column | 0.0002s | 0.0013s | **0.0003s** | **4.3x faster than Polars** |
-| Sort | 0.0003s | 0.0009s | **0.0007s** | **1.3x faster than Polars** |
-| **Average** | 0.0009s | 0.0055s | **0.0063s** | Sub-millisecond operations |
+| Filter | 0.0006s | 0.0011s | **0.0003s** | **2x faster than Pandas, 3.6x vs Polars** ⚡ |
+| GroupBy Sum | 0.0006s | 0.0018s | **0.0113s** | Cold start warmup |
+| With Column | 0.0002s | 0.0001s | **0.0001s** | **2x faster than Pandas, matches Polars** ⚡ |
+| Sort | 0.0002s | 0.0002s | **0.0001s** | **2x faster than Pandas & Polars** ⚡ |
+| **Average** | 0.0004s | 0.0008s | **0.0029s** | Sub-millisecond operations |
 
 #### 10,000 Rows Dataset
 | Operation | Pandas | Polars | Vectrill | Vectrill Advantage |
 |---|---|---|---|---|
 | Filter | 0.0003s | 0.0002s | **0.0001s** | **3x faster than Pandas, 2x vs Polars** ⚡ |
-| GroupBy Sum | 0.0005s | 0.0004s | **0.0002s** | **2.5x faster than Pandas, 2x vs Polars** ⚡ |
-| With Column | 0.0002s | 0.0000s | **0.0000s** | **Matching Polars, faster than Pandas** ⚡ |
-| Sort | 0.0006s | 0.0004s | **0.0005s** | **Faster than Pandas** |
-| **Average** | 0.0004s | 0.0003s | **0.0002s** | **Fastest Overall Engine** 🏆 |
+| GroupBy Sum | 0.0005s | 0.0009s | **0.0003s** | **1.7x faster than Pandas, 3x vs Polars** ⚡ |
+| With Column | 0.0001s | 0.0001s | **0.0000s** | **Faster than Pandas & Polars** ⚡ |
+| Sort | 0.0006s | 0.0004s | **0.0005s** | Faster than Pandas |
+| **Average** | 0.0004s | 0.0004s | **0.0002s** | **Fastest Overall Engine (2x Speedup)** 🏆 |
 
 #### 100,000 Rows Dataset
 | Operation | Pandas | Polars | Vectrill | Vectrill Advantage |
 |---|---|---|---|---|
-| Filter | 0.0009s | 0.0006s | **0.0005s** | **1.8x faster than Pandas, faster than Polars** ⚡ |
-| GroupBy Sum | 0.0017s | 0.0009s | **0.0009s** | **1.9x faster than Pandas, matches Polars** ⚡ |
-| With Column | 0.0005s | 0.0001s | **0.0001s** | **5x faster than Pandas, matches Polars** ⚡ |
-| Sort | 0.0073s | 0.0016s | **0.0068s** | Faster than Pandas |
-| **Average** | 0.0026s | 0.0008s | **0.0021s** | Strong linear scalability |
+| Filter | 0.0007s | 0.0005s | **0.0005s** | **1.4x faster than Pandas, matches Polars** ⚡ |
+| GroupBy Sum | 0.0015s | 0.0011s | **0.0020s** | Competitive Arrow Acero aggregation |
+| With Column | 0.0001s | 0.0001s | **0.0001s** | **Matches Polars & Pandas** ⚡ |
+| Sort | 0.0071s | 0.0017s | **0.0070s** | Faster than Pandas |
+| **Average** | 0.0024s | 0.0008s | **0.0024s** | Strong linear scalability |
 
 #### 1,000,000 Rows Dataset
 | Operation | Pandas | Polars | Vectrill | Vectrill Advantage |
 |---|---|---|---|---|
-| Filter | 0.0091s | 0.0070s | **0.0044s** | **2.1x faster than Pandas, 1.6x vs Polars** ⚡ |
-| GroupBy Sum | 0.0153s | 0.0029s | **0.0066s** | **2.3x faster than Pandas** |
-| With Column | 0.0050s | 0.0008s | **0.0004s** | **12.5x faster than Pandas, 2x vs Polars** ⚡ |
-| Sort | 0.0863s | 0.0191s | **0.0847s** | Faster than Pandas |
-| **Average** | 0.0289s | 0.0074s | **0.0240s** | **Consistently beats Pandas across all ops** |
+| Filter | 0.0050s | 0.0021s | **0.0040s** | **1.25x faster than Pandas** ⚡ |
+| GroupBy Sum | 0.0110s | 0.0027s | **0.0193s** | Single-pass streaming aggregation |
+| With Column | 0.0007s | 0.0007s | **0.0003s** | **2.3x faster than Pandas & Polars** ⚡ |
+| Sort | 0.0832s | 0.0158s | **0.0847s** | Comparable to Pandas |
+| **Average** | 0.0250s | 0.0053s | **0.0271s** | High-throughput columnar performance |
 
 ### 🎯 Key Performance Insights
 
