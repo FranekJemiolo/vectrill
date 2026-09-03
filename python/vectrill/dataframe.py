@@ -1067,11 +1067,7 @@ class VectrillDataFrame:
                             # Apply window function on sorted data
                             df_sorted = df.sort_values(sort_cols)
                             df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].shift(offset)
-                            
-                            # Map results back to original order using the original index
-                            # Create a mapping from sorted index to results
-                            result_mapping = df_sorted[name].to_dict()
-                            df[name] = df.index.map(result_mapping)
+                            df[name] = df_sorted[name]
                         elif window_func == 'var':
                             df[name] = df.groupby(partition_cols)[col_name].transform('var')
                         elif window_func == 'abs':
@@ -1089,9 +1085,7 @@ class VectrillDataFrame:
                                 sort_cols = partition_cols + existing_order_cols
                                 df_sorted = df.sort_values(sort_cols)
                                 df_sorted[name] = df_sorted.groupby(partition_cols)[col_name].cumsum()
-                                # Restore original order by sorting back to original index
-                                df_sorted = df_sorted.sort_index()
-                                df[name] = df_sorted[name].values
+                                df[name] = df_sorted[name]
                             else:
                                 # Simple cumsum without order by
                                 df[name] = df.groupby(partition_cols)[col_name].cumsum()

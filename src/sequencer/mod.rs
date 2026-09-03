@@ -116,62 +116,91 @@ impl Sequencer {
             Self::get_timestamp_static(batch, *row_idx).unwrap_or(i64::MIN)
         });
 
-        // Build output batch using Arrow take kernel
+        // Build output batch using Arrow compute kernels (take/interleave)
         let first_batch = &self.output_buffer[0].0;
         let schema = first_batch.schema();
-        let _num_rows = self.output_buffer.len();
 
-        // Collect indices per batch
-        let mut batch_indices: std::collections::HashMap<usize, Vec<usize>> =
-            std::collections::HashMap::new();
-        for (batch, row_idx) in &self.output_buffer {
-            // Use batch address as key (simplified)
-            let key = batch as *const _ as usize;
-            batch_indices.entry(key).or_default().push(*row_idx);
-        }
-
-        // TODO: Implement proper batch construction with Arrow take kernel
-        // For now, create a simple batch
-        let timestamps: Vec<i64> = self
+        let same_batch = self
             .output_buffer
             .iter()
-            .map(|(batch, row_idx)| self.get_timestamp(batch, *row_idx).unwrap_or(0))
-            .collect();
+            .all(|(b, _)| Arc::ptr_eq(b, first_batch));
 
-        let keys: Vec<String> = self
-            .output_buffer
-            .iter()
-            .map(|(batch, row_idx)| {
-                self.get_key(batch, *row_idx)
-                    .unwrap_or_else(|| "unknown".to_string())
-            })
-            .collect();
+        let result = if same_batch {
+            let indices = arrow::array::UInt32Array::from(
+                self.output_buffer
+                    .iter()
+                    .map(|(_, row)| *row as u32)
+                    .collect::<Vec<_>>(),
+            );
+            let mut cols = Vec::with_capacity(schema.fields().len());
+            let mut ok = true;
+            for col_idx in 0..schema.fields().len() {
+                match arrow::compute::take(first_batch.column(col_idx).as_ref(), &indices, None) {
+                    Ok(col) => cols.push(col),
+                    Err(_) => {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if ok {
+                RecordBatch::try_new(schema.clone(), cols).ok()
+            } else {
+                None
+            }
+        } else {
+            let mut unique_batches: Vec<&Arc<RecordBatch>> = Vec::new();
+            for (b, _) in &self.output_buffer {
+                if !unique_batches.iter().any(|ub| Arc::ptr_eq(ub, b)) {
+                    unique_batches.push(b);
+                }
+            }
 
-        let values: Vec<i64> = self
-            .output_buffer
-            .iter()
-            .map(|(batch, row_idx)| self.get_value(batch, *row_idx).unwrap_or(0))
-            .collect();
+            let coordinates: Vec<(usize, usize)> = self
+                .output_buffer
+                .iter()
+                .map(|(b, row)| {
+                    let batch_idx = unique_batches
+                        .iter()
+                        .position(|ub| Arc::ptr_eq(ub, b))
+                        .unwrap();
+                    (batch_idx, *row)
+                })
+                .collect();
 
-        let timestamp_array = Int64Array::from(timestamps);
-        let key_array = StringArray::from(keys);
-        let value_array = Int64Array::from(values);
-
-        let result = RecordBatch::try_new(
-            schema.clone(),
-            vec![
-                Arc::new(timestamp_array),
-                Arc::new(key_array),
-                Arc::new(value_array),
-            ],
-        )
-        .ok();
+            let mut cols = Vec::with_capacity(schema.fields().len());
+            let mut ok = true;
+            for col_idx in 0..schema.fields().len() {
+                let column_arrays: Vec<&dyn arrow::array::Array> = unique_batches
+                    .iter()
+                    .map(|b| b.column(col_idx).as_ref())
+                    .collect();
+                match arrow::compute::interleave(&column_arrays, &coordinates) {
+                    Ok(col) => cols.push(col),
+                    Err(_) => {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if ok {
+                RecordBatch::try_new(schema.clone(), cols).ok()
+            } else {
+                None
+            }
+        };
 
         // Clear buffer
         self.output_buffer.clear();
 
         // Update watermark
         self.update_watermark();
+
+        // Free cursors if all items have been emitted to prevent memory leaks
+        if self.heap.is_empty() {
+            self.cursors.clear();
+            self.max_timestamps.clear();
+        }
 
         result
     }
@@ -204,14 +233,27 @@ impl Sequencer {
         }
     }
 
-    /// Update the watermark based on max timestamps from all connectors
+    /// Update the watermark based on active cursors or latest timestamps
     fn update_watermark(&mut self) {
         if self.max_timestamps.is_empty() {
             return;
         }
 
-        let min_max = *self.max_timestamps.iter().min().unwrap_or(&i64::MAX);
-        self.watermark = min_max - self.config.max_lateness_ms;
+        let active_max_timestamps: Vec<i64> = self
+            .cursors
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.has_more())
+            .map(|(id, _)| self.max_timestamps[id])
+            .collect();
+
+        let min_max = if !active_max_timestamps.is_empty() {
+            *active_max_timestamps.iter().min().unwrap()
+        } else {
+            *self.max_timestamps.iter().max().unwrap_or(&i64::MIN)
+        };
+
+        self.watermark = min_max.saturating_sub(self.config.max_lateness_ms);
     }
 
     /// Get timestamp from a batch at a specific row
@@ -231,6 +273,7 @@ impl Sequencer {
     }
 
     /// Get key from a batch at a specific row
+    #[allow(dead_code)]
     fn get_key(&self, batch: &RecordBatch, row_idx: usize) -> Option<String> {
         if batch.num_columns() > 1 {
             let column = batch.column(1);
@@ -246,6 +289,7 @@ impl Sequencer {
     }
 
     /// Get value from a batch at a specific row
+    #[allow(dead_code)]
     fn get_value(&self, batch: &RecordBatch, row_idx: usize) -> Option<i64> {
         if batch.num_columns() > 2 {
             let column = batch.column(2);

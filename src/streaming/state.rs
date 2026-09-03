@@ -29,10 +29,15 @@ impl AggregateState {
 
     /// Update the state with a new value
     pub fn update(&mut self, value: f64) {
+        if self.count == 0 {
+            self.min = value;
+            self.max = value;
+        } else {
+            self.min = self.min.min(value);
+            self.max = self.max.max(value);
+        }
         self.count += 1;
         self.sum += value;
-        self.min = self.min.min(value);
-        self.max = self.max.max(value);
     }
 
     /// Calculate the average

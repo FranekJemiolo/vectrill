@@ -44,16 +44,28 @@ impl Pipeline {
         Ok(current_batch)
     }
 
-    /// Flush all operators in the pipeline
+    /// Flush all operators in the pipeline, cascading flushed batches through downstream operators
     pub fn flush(&mut self) -> Result<Vec<RecordBatch>> {
-        let mut all_batches = Vec::new();
+        let mut final_batches = Vec::new();
 
-        for operator in &mut self.operators {
-            let batches = operator.flush()?;
-            all_batches.extend(batches);
+        for i in 0..self.operators.len() {
+            let flushed = self.operators[i].flush()?;
+            for mut batch in flushed {
+                let mut valid = true;
+                for next_op in &mut self.operators[(i + 1)..] {
+                    batch = next_op.process(batch)?;
+                    if batch.num_rows() == 0 {
+                        valid = false;
+                        break;
+                    }
+                }
+                if valid {
+                    final_batches.push(batch);
+                }
+            }
         }
 
-        Ok(all_batches)
+        Ok(final_batches)
     }
 
     /// Get the number of operators in the pipeline

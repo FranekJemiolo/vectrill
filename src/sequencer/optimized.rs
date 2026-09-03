@@ -115,62 +115,90 @@ impl OptimizedSequencer {
             Self::get_timestamp_static(batch, *row_idx).unwrap_or(i64::MIN)
         });
 
-        // Build output batch using optimized approach
+        // Build output batch using vectorized take / interleave kernels
         let first_batch = &self.batches[self.output_buffer[0].0];
         let schema = first_batch.schema();
-        let num_rows = self.output_buffer.len();
 
-        // Pre-allocate arrays with exact capacity
-        let mut timestamps = Vec::with_capacity(num_rows);
-        let mut keys = Vec::with_capacity(num_rows);
-        let mut values = Vec::with_capacity(num_rows);
+        let first_batch_id = self.output_buffer[0].0;
+        let same_batch = self
+            .output_buffer
+            .iter()
+            .all(|(b_id, _)| *b_id == first_batch_id);
 
-        // Extract data in bulk
-        for (batch_id, row_idx) in &self.output_buffer {
-            let batch = &self.batches[*batch_id];
-
-            // Extract timestamp
-            if let Some(ts) = Self::get_timestamp_static(batch, *row_idx) {
-                timestamps.push(ts);
+        let result = if same_batch {
+            let indices = arrow::array::UInt32Array::from(
+                self.output_buffer
+                    .iter()
+                    .map(|(_, row)| *row as u32)
+                    .collect::<Vec<_>>(),
+            );
+            let mut cols = Vec::with_capacity(schema.fields().len());
+            let mut ok = true;
+            for col_idx in 0..schema.fields().len() {
+                match arrow::compute::take(first_batch.column(col_idx).as_ref(), &indices, None) {
+                    Ok(col) => cols.push(col),
+                    Err(_) => {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if ok {
+                RecordBatch::try_new(schema.clone(), cols).ok()
             } else {
-                timestamps.push(0);
+                None
+            }
+        } else {
+            let mut unique_batch_ids: Vec<usize> = Vec::new();
+            for (b_id, _) in &self.output_buffer {
+                if !unique_batch_ids.contains(b_id) {
+                    unique_batch_ids.push(*b_id);
+                }
             }
 
-            // Extract key (avoid allocation when possible)
-            if let Some(key) = Self::get_key_static(batch, *row_idx) {
-                keys.push(key);
-            } else {
-                keys.push("unknown".to_string());
+            let coordinates: Vec<(usize, usize)> = self
+                .output_buffer
+                .iter()
+                .map(|(b_id, row)| {
+                    let batch_pos = unique_batch_ids.iter().position(|id| id == b_id).unwrap();
+                    (batch_pos, *row)
+                })
+                .collect();
+
+            let mut cols = Vec::with_capacity(schema.fields().len());
+            let mut ok = true;
+            for col_idx in 0..schema.fields().len() {
+                let column_arrays: Vec<&dyn arrow::array::Array> = unique_batch_ids
+                    .iter()
+                    .map(|id| self.batches[*id].column(col_idx).as_ref())
+                    .collect();
+                match arrow::compute::interleave(&column_arrays, &coordinates) {
+                    Ok(col) => cols.push(col),
+                    Err(_) => {
+                        ok = false;
+                        break;
+                    }
+                }
             }
-
-            // Extract value
-            if let Some(val) = Self::get_value_static(batch, *row_idx) {
-                values.push(val);
+            if ok {
+                RecordBatch::try_new(schema.clone(), cols).ok()
             } else {
-                values.push(0);
+                None
             }
-        }
-
-        // Create arrays efficiently
-        let timestamp_array = Int64Array::from(timestamps);
-        let key_array = StringArray::from(keys);
-        let value_array = Int64Array::from(values);
-
-        let result = RecordBatch::try_new(
-            schema.clone(),
-            vec![
-                Arc::new(timestamp_array),
-                Arc::new(key_array),
-                Arc::new(value_array),
-            ],
-        )
-        .ok();
+        };
 
         // Clear buffer
         self.output_buffer.clear();
 
         // Update watermark
         self.update_watermark();
+
+        // Free memory when all items are emitted
+        if self.heap.is_empty() {
+            self.batches.clear();
+            self.cursors.clear();
+            self.max_timestamps.clear();
+        }
 
         result
     }
@@ -182,7 +210,7 @@ impl OptimizedSequencer {
 
     /// Get the number of pending batches
     pub fn pending_batches(&self) -> usize {
-        self.batches.len()
+        self.cursors.len()
     }
 
     /// Advance a cursor to the next row
@@ -203,14 +231,27 @@ impl OptimizedSequencer {
         }
     }
 
-    /// Update the watermark based on max timestamps from all connectors
+    /// Update the watermark based on active cursors or latest timestamps
     fn update_watermark(&mut self) {
         if self.max_timestamps.is_empty() {
             return;
         }
 
-        let min_max = *self.max_timestamps.iter().min().unwrap_or(&i64::MAX);
-        self.watermark = min_max - self.config.max_lateness_ms;
+        let active_max_timestamps: Vec<i64> = self
+            .cursors
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.has_more())
+            .map(|(id, _)| self.max_timestamps[id])
+            .collect();
+
+        let min_max = if !active_max_timestamps.is_empty() {
+            *active_max_timestamps.iter().min().unwrap()
+        } else {
+            *self.max_timestamps.iter().max().unwrap_or(&i64::MIN)
+        };
+
+        self.watermark = min_max.saturating_sub(self.config.max_lateness_ms);
     }
 
     /// Get timestamp from a batch at a specific row
@@ -230,6 +271,7 @@ impl OptimizedSequencer {
     }
 
     /// Static helper to get key from a batch
+    #[allow(dead_code)]
     fn get_key_static(batch: &RecordBatch, row_idx: usize) -> Option<String> {
         if batch.num_columns() > 1 {
             let column = batch.column(1);
@@ -245,6 +287,7 @@ impl OptimizedSequencer {
     }
 
     /// Static helper to get value from a batch
+    #[allow(dead_code)]
     fn get_value_static(batch: &RecordBatch, row_idx: usize) -> Option<i64> {
         if batch.num_columns() > 2 {
             let column = batch.column(2);

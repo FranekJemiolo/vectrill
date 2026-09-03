@@ -1,8 +1,7 @@
 //! Arithmetic operations for physical expressions
 
-use crate::expression::physical::ExpressionError;
+use crate::expression::physical::{align_operands, ExpressionError};
 use arrow::array::*;
-use arrow::datatypes::DataType;
 use std::sync::Arc;
 
 /// Arithmetic operations with broadcasting support
@@ -14,26 +13,9 @@ impl ArithmeticOps {
         left: &ArrayRef,
         right: &ArrayRef,
     ) -> Result<Arc<dyn arrow::array::Array>, ExpressionError> {
-        match (left.data_type(), right.data_type()) {
-            (DataType::Int64, DataType::Int64) => {
-                let left_ints = left.as_any().downcast_ref::<Int64Array>().unwrap();
-                let right_ints = right.as_any().downcast_ref::<Int64Array>().unwrap();
-
-                let result = Self::add_int64(left_ints, right_ints)?;
-                Ok(Arc::new(result) as Arc<dyn arrow::array::Array>)
-            }
-            (DataType::Float64, DataType::Float64) => {
-                let left_floats = left.as_any().downcast_ref::<Float64Array>().unwrap();
-                let right_floats = right.as_any().downcast_ref::<Float64Array>().unwrap();
-
-                let result = Self::add_float64(left_floats, right_floats)?;
-                Ok(Arc::new(result) as Arc<dyn arrow::array::Array>)
-            }
-            _ => Err(ExpressionError::TypeMismatch {
-                expected: "Int64 or Float64".to_string(),
-                actual: format!("{:?} + {:?}", left.data_type(), right.data_type()),
-            }),
-        }
+        let (l, r) = align_operands(left, right)?;
+        let res = arrow_arith::numeric::add(&l, &r).map_err(ExpressionError::ArrowError)?;
+        Ok(Arc::new(res) as Arc<dyn arrow::array::Array>)
     }
 
     /// Subtraction with broadcasting support
@@ -41,26 +23,9 @@ impl ArithmeticOps {
         left: &ArrayRef,
         right: &ArrayRef,
     ) -> Result<Arc<dyn arrow::array::Array>, ExpressionError> {
-        match (left.data_type(), right.data_type()) {
-            (DataType::Int64, DataType::Int64) => {
-                let left_ints = left.as_any().downcast_ref::<Int64Array>().unwrap();
-                let right_ints = right.as_any().downcast_ref::<Int64Array>().unwrap();
-
-                let result = Self::subtract_int64(left_ints, right_ints)?;
-                Ok(Arc::new(result) as Arc<dyn arrow::array::Array>)
-            }
-            (DataType::Float64, DataType::Float64) => {
-                let left_floats = left.as_any().downcast_ref::<Float64Array>().unwrap();
-                let right_floats = right.as_any().downcast_ref::<Float64Array>().unwrap();
-
-                let result = Self::subtract_float64(left_floats, right_floats)?;
-                Ok(Arc::new(result) as Arc<dyn arrow::array::Array>)
-            }
-            _ => Err(ExpressionError::TypeMismatch {
-                expected: "Int64 or Float64".to_string(),
-                actual: format!("{:?} - {:?}", left.data_type(), right.data_type()),
-            }),
-        }
+        let (l, r) = align_operands(left, right)?;
+        let res = arrow_arith::numeric::sub(&l, &r).map_err(ExpressionError::ArrowError)?;
+        Ok(Arc::new(res) as Arc<dyn arrow::array::Array>)
     }
 
     /// Multiplication with broadcasting support
@@ -68,26 +33,9 @@ impl ArithmeticOps {
         left: &ArrayRef,
         right: &ArrayRef,
     ) -> Result<Arc<dyn arrow::array::Array>, ExpressionError> {
-        match (left.data_type(), right.data_type()) {
-            (DataType::Int64, DataType::Int64) => {
-                let left_ints = left.as_any().downcast_ref::<Int64Array>().unwrap();
-                let right_ints = right.as_any().downcast_ref::<Int64Array>().unwrap();
-
-                let result = Self::multiply_int64(left_ints, right_ints)?;
-                Ok(Arc::new(result) as Arc<dyn arrow::array::Array>)
-            }
-            (DataType::Float64, DataType::Float64) => {
-                let left_floats = left.as_any().downcast_ref::<Float64Array>().unwrap();
-                let right_floats = right.as_any().downcast_ref::<Float64Array>().unwrap();
-
-                let result = Self::multiply_float64(left_floats, right_floats)?;
-                Ok(Arc::new(result) as Arc<dyn arrow::array::Array>)
-            }
-            _ => Err(ExpressionError::TypeMismatch {
-                expected: "Int64 or Float64".to_string(),
-                actual: format!("{:?} * {:?}", left.data_type(), right.data_type()),
-            }),
-        }
+        let (l, r) = align_operands(left, right)?;
+        let res = arrow_arith::numeric::mul(&l, &r).map_err(ExpressionError::ArrowError)?;
+        Ok(Arc::new(res) as Arc<dyn arrow::array::Array>)
     }
 
     /// Division with broadcasting support
@@ -95,273 +43,9 @@ impl ArithmeticOps {
         left: &ArrayRef,
         right: &ArrayRef,
     ) -> Result<Arc<dyn arrow::array::Array>, ExpressionError> {
-        match (left.data_type(), right.data_type()) {
-            (DataType::Float64, DataType::Float64) => {
-                let left_floats = left.as_any().downcast_ref::<Float64Array>().unwrap();
-                let right_floats = right.as_any().downcast_ref::<Float64Array>().unwrap();
-
-                let result = Self::divide_float64(left_floats, right_floats)?;
-                Ok(Arc::new(result) as Arc<dyn arrow::array::Array>)
-            }
-            _ => Err(ExpressionError::TypeMismatch {
-                expected: "Int64 or Float64".to_string(),
-                actual: format!("{:?} / {:?}", left.data_type(), right.data_type()),
-            }),
-        }
-    }
-
-    /// Int64 addition with broadcasting
-    fn add_int64(left: &Int64Array, right: &Int64Array) -> Result<Int64Array, ExpressionError> {
-        let len = left.len().max(right.len());
-        let mut result = Vec::with_capacity(len);
-
-        if left.len() == right.len() {
-            for i in 0..len {
-                result.push(left.value(i) + right.value(i));
-            }
-        } else if left.len() == 1 {
-            let left_val = left.value(0);
-            for i in 0..right.len() {
-                result.push(left_val + right.value(i));
-            }
-        } else if right.len() == 1 {
-            let right_val = right.value(0);
-            for i in 0..left.len() {
-                result.push(left.value(i) + right_val);
-            }
-        } else {
-            return Err(ExpressionError::InvalidOperation {
-                op: "add".to_string(),
-                left_type: "Int64".to_string(),
-                right_type: "Int64".to_string(),
-            });
-        }
-
-        Ok(Int64Array::from(result))
-    }
-
-    /// Float64 addition with broadcasting
-    fn add_float64(
-        left: &Float64Array,
-        right: &Float64Array,
-    ) -> Result<Float64Array, ExpressionError> {
-        let len = left.len().max(right.len());
-        let mut result = Vec::with_capacity(len);
-
-        if left.len() == right.len() {
-            for i in 0..len {
-                result.push(left.value(i) + right.value(i));
-            }
-        } else if left.len() == 1 {
-            let left_val = left.value(0);
-            for i in 0..right.len() {
-                result.push(left_val + right.value(i));
-            }
-        } else if right.len() == 1 {
-            let right_val = right.value(0);
-            for i in 0..left.len() {
-                result.push(left.value(i) + right_val);
-            }
-        } else {
-            return Err(ExpressionError::InvalidOperation {
-                op: "add".to_string(),
-                left_type: "Float64".to_string(),
-                right_type: "Float64".to_string(),
-            });
-        }
-
-        Ok(Float64Array::from(result))
-    }
-
-    /// Int64 subtraction with broadcasting
-    fn subtract_int64(
-        left: &Int64Array,
-        right: &Int64Array,
-    ) -> Result<Int64Array, ExpressionError> {
-        let len = left.len().max(right.len());
-        let mut result = Vec::with_capacity(len);
-
-        if left.len() == right.len() {
-            for i in 0..len {
-                result.push(left.value(i) - right.value(i));
-            }
-        } else if left.len() == 1 {
-            let left_val = left.value(0);
-            for i in 0..right.len() {
-                result.push(left_val - right.value(i));
-            }
-        } else if right.len() == 1 {
-            let right_val = right.value(0);
-            for i in 0..left.len() {
-                result.push(left.value(i) - right_val);
-            }
-        } else {
-            return Err(ExpressionError::InvalidOperation {
-                op: "subtract".to_string(),
-                left_type: "Int64".to_string(),
-                right_type: "Int64".to_string(),
-            });
-        }
-
-        Ok(Int64Array::from(result))
-    }
-
-    /// Float64 subtraction with broadcasting
-    fn subtract_float64(
-        left: &Float64Array,
-        right: &Float64Array,
-    ) -> Result<Float64Array, ExpressionError> {
-        let len = left.len().max(right.len());
-        let mut result = Vec::with_capacity(len);
-
-        if left.len() == right.len() {
-            for i in 0..len {
-                result.push(left.value(i) - right.value(i));
-            }
-        } else if left.len() == 1 {
-            let left_val = left.value(0);
-            for i in 0..right.len() {
-                result.push(left_val - right.value(i));
-            }
-        } else if right.len() == 1 {
-            let right_val = right.value(0);
-            for i in 0..left.len() {
-                result.push(left.value(i) - right_val);
-            }
-        } else {
-            return Err(ExpressionError::InvalidOperation {
-                op: "subtract".to_string(),
-                left_type: "Float64".to_string(),
-                right_type: "Float64".to_string(),
-            });
-        }
-
-        Ok(Float64Array::from(result))
-    }
-
-    /// Int64 multiplication with broadcasting
-    fn multiply_int64(
-        left: &Int64Array,
-        right: &Int64Array,
-    ) -> Result<Int64Array, ExpressionError> {
-        let len = left.len().max(right.len());
-        let mut result = Vec::with_capacity(len);
-
-        if left.len() == right.len() {
-            for i in 0..len {
-                result.push(left.value(i) * right.value(i));
-            }
-        } else if left.len() == 1 {
-            let left_val = left.value(0);
-            for i in 0..right.len() {
-                result.push(left_val * right.value(i));
-            }
-        } else if right.len() == 1 {
-            let right_val = right.value(0);
-            for i in 0..left.len() {
-                result.push(left.value(i) * right_val);
-            }
-        } else {
-            return Err(ExpressionError::InvalidOperation {
-                op: "multiply".to_string(),
-                left_type: "Int64".to_string(),
-                right_type: "Int64".to_string(),
-            });
-        }
-
-        Ok(Int64Array::from(result))
-    }
-
-    /// Float64 multiplication with broadcasting
-    fn multiply_float64(
-        left: &Float64Array,
-        right: &Float64Array,
-    ) -> Result<Float64Array, ExpressionError> {
-        let len = left.len().max(right.len());
-        let mut result = Vec::with_capacity(len);
-
-        if left.len() == right.len() {
-            for i in 0..len {
-                result.push(left.value(i) * right.value(i));
-            }
-        } else if left.len() == 1 {
-            let left_val = left.value(0);
-            for i in 0..right.len() {
-                result.push(left_val * right.value(i));
-            }
-        } else if right.len() == 1 {
-            let right_val = right.value(0);
-            for i in 0..left.len() {
-                result.push(left.value(i) * right_val);
-            }
-        } else {
-            return Err(ExpressionError::InvalidOperation {
-                op: "multiply".to_string(),
-                left_type: "Float64".to_string(),
-                right_type: "Float64".to_string(),
-            });
-        }
-
-        Ok(Float64Array::from(result))
-    }
-
-    /// Float64 division with broadcasting
-    fn divide_float64(
-        left: &Float64Array,
-        right: &Float64Array,
-    ) -> Result<Float64Array, ExpressionError> {
-        let len = left.len().max(right.len());
-        let mut result = Vec::with_capacity(len);
-
-        if left.len() == right.len() {
-            for i in 0..len {
-                let right_val = right.value(i);
-                if right_val != 0.0 {
-                    result.push(left.value(i) / right_val);
-                } else {
-                    return Err(ExpressionError::InvalidOperation {
-                        op: "divide".to_string(),
-                        left_type: "Float64".to_string(),
-                        right_type: "Float64".to_string(),
-                    });
-                }
-            }
-        } else if left.len() == 1 {
-            let left_val = left.value(0);
-            for i in 0..right.len() {
-                let right_val = right.value(i);
-                if right_val != 0.0 {
-                    result.push(left_val / right_val);
-                } else {
-                    return Err(ExpressionError::InvalidOperation {
-                        op: "divide".to_string(),
-                        left_type: "Float64".to_string(),
-                        right_type: "Float64".to_string(),
-                    });
-                }
-            }
-        } else if right.len() == 1 {
-            let right_val = right.value(0);
-            if right_val != 0.0 {
-                for i in 0..left.len() {
-                    result.push(left.value(i) / right_val);
-                }
-            } else {
-                return Err(ExpressionError::InvalidOperation {
-                    op: "divide".to_string(),
-                    left_type: "Float64".to_string(),
-                    right_type: "Float64".to_string(),
-                });
-            }
-        } else {
-            return Err(ExpressionError::InvalidOperation {
-                op: "divide".to_string(),
-                left_type: "Float64".to_string(),
-                right_type: "Float64".to_string(),
-            });
-        }
-
-        Ok(Float64Array::from(result))
+        let (l, r) = align_operands(left, right)?;
+        let res = arrow_arith::numeric::div(&l, &r).map_err(ExpressionError::ArrowError)?;
+        Ok(Arc::new(res) as Arc<dyn arrow::array::Array>)
     }
 }
 

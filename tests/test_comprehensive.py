@@ -201,7 +201,7 @@ class TestComprehensiveFunctions:
         # Test pandas
         pandas_sorted = time_series_data.sort_values(['group', 'date'])
         pandas_sorted['lag_value'] = pandas_sorted.groupby('group')['value'].shift(1)
-        pandas_result = pandas_sorted.sort_index()
+        pandas_result = pandas_sorted
         
         # Test Vectrill
         vectrill_df = vectrill.from_pandas(time_series_data)
@@ -227,7 +227,7 @@ class TestComprehensiveFunctions:
         # Test pandas
         pandas_sorted = time_series_data.sort_values(['group', 'date'])
         pandas_sorted['cumsum_value'] = pandas_sorted.groupby('group')['value'].cumsum()
-        pandas_result = pandas_sorted.sort_index()
+        pandas_result = pandas_sorted
         
         # Test Vectrill
         vectrill_df = vectrill.from_pandas(time_series_data)

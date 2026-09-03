@@ -1,6 +1,6 @@
 //! Comparison operations for physical expressions
 
-use crate::expression::physical::ExpressionError;
+use crate::expression::physical::{align_operands, ExpressionError};
 use arrow::array::*;
 use std::sync::Arc;
 
@@ -13,15 +13,9 @@ impl ComparisonOps {
         left: &ArrayRef,
         right: &ArrayRef,
     ) -> Result<Arc<dyn arrow::array::Array>, ExpressionError> {
-        let len = left.len().max(right.len());
-        let mut bool_array = Vec::with_capacity(len);
-
-        for _i in 0..len {
-            // For now, always return true (placeholder implementation)
-            bool_array.push(true);
-        }
-
-        Ok(Arc::new(BooleanArray::from(bool_array)) as Arc<dyn arrow::array::Array>)
+        let (l, r) = align_operands(left, right)?;
+        let res = arrow_ord::cmp::eq(&l, &r).map_err(ExpressionError::ArrowError)?;
+        Ok(Arc::new(res) as Arc<dyn arrow::array::Array>)
     }
 
     /// Not equal comparison
@@ -29,179 +23,49 @@ impl ComparisonOps {
         left: &ArrayRef,
         right: &ArrayRef,
     ) -> Result<Arc<dyn arrow::array::Array>, ExpressionError> {
-        let len = left.len().max(right.len());
-        let mut bool_array = Vec::with_capacity(len);
-
-        for _i in 0..len {
-            // For now, always return false (placeholder implementation)
-            bool_array.push(false);
-        }
-
-        Ok(Arc::new(BooleanArray::from(bool_array)) as Arc<dyn arrow::array::Array>)
+        let (l, r) = align_operands(left, right)?;
+        let res = arrow_ord::cmp::neq(&l, &r).map_err(ExpressionError::ArrowError)?;
+        Ok(Arc::new(res) as Arc<dyn arrow::array::Array>)
     }
 
-    /// Less than comparison (Int64 only for now)
+    /// Less than comparison
     pub fn less_than(
         left: &ArrayRef,
         right: &ArrayRef,
     ) -> Result<Arc<dyn arrow::array::Array>, ExpressionError> {
-        let left_ints =
-            left.as_any()
-                .downcast_ref::<Int64Array>()
-                .ok_or(ExpressionError::TypeMismatch {
-                    expected: "Int64".to_string(),
-                    actual: format!("{:?}", left.data_type()),
-                })?;
-        let right_ints =
-            right
-                .as_any()
-                .downcast_ref::<Int64Array>()
-                .ok_or(ExpressionError::TypeMismatch {
-                    expected: "Int64".to_string(),
-                    actual: format!("{:?}", right.data_type()),
-                })?;
-
-        let len = left_ints.len().max(right_ints.len());
-        let mut bool_array = Vec::with_capacity(len);
-
-        for i in 0..len {
-            let left_val = if left_ints.len() == 1 {
-                left_ints.value(0)
-            } else {
-                left_ints.value(i)
-            };
-            let right_val = if right_ints.len() == 1 {
-                right_ints.value(0)
-            } else {
-                right_ints.value(i)
-            };
-            bool_array.push(left_val < right_val);
-        }
-
-        Ok(Arc::new(BooleanArray::from(bool_array)) as Arc<dyn arrow::array::Array>)
+        let (l, r) = align_operands(left, right)?;
+        let res = arrow_ord::cmp::lt(&l, &r).map_err(ExpressionError::ArrowError)?;
+        Ok(Arc::new(res) as Arc<dyn arrow::array::Array>)
     }
 
-    /// Less than or equal comparison (Int64 only for now)
+    /// Less than or equal comparison
     pub fn less_than_equal(
         left: &ArrayRef,
         right: &ArrayRef,
     ) -> Result<Arc<dyn arrow::array::Array>, ExpressionError> {
-        let left_ints =
-            left.as_any()
-                .downcast_ref::<Int64Array>()
-                .ok_or(ExpressionError::TypeMismatch {
-                    expected: "Int64".to_string(),
-                    actual: format!("{:?}", left.data_type()),
-                })?;
-        let right_ints =
-            right
-                .as_any()
-                .downcast_ref::<Int64Array>()
-                .ok_or(ExpressionError::TypeMismatch {
-                    expected: "Int64".to_string(),
-                    actual: format!("{:?}", right.data_type()),
-                })?;
-
-        let len = left_ints.len().max(right_ints.len());
-        let mut bool_array = Vec::with_capacity(len);
-
-        for i in 0..len {
-            let left_val = if left_ints.len() == 1 {
-                left_ints.value(0)
-            } else {
-                left_ints.value(i)
-            };
-            let right_val = if right_ints.len() == 1 {
-                right_ints.value(0)
-            } else {
-                right_ints.value(i)
-            };
-            bool_array.push(left_val <= right_val);
-        }
-
-        Ok(Arc::new(BooleanArray::from(bool_array)) as Arc<dyn arrow::array::Array>)
+        let (l, r) = align_operands(left, right)?;
+        let res = arrow_ord::cmp::lt_eq(&l, &r).map_err(ExpressionError::ArrowError)?;
+        Ok(Arc::new(res) as Arc<dyn arrow::array::Array>)
     }
 
-    /// Greater than comparison (Int64 only for now)
+    /// Greater than comparison
     pub fn greater_than(
         left: &ArrayRef,
         right: &ArrayRef,
     ) -> Result<Arc<dyn arrow::array::Array>, ExpressionError> {
-        let left_ints =
-            left.as_any()
-                .downcast_ref::<Int64Array>()
-                .ok_or(ExpressionError::TypeMismatch {
-                    expected: "Int64".to_string(),
-                    actual: format!("{:?}", left.data_type()),
-                })?;
-        let right_ints =
-            right
-                .as_any()
-                .downcast_ref::<Int64Array>()
-                .ok_or(ExpressionError::TypeMismatch {
-                    expected: "Int64".to_string(),
-                    actual: format!("{:?}", right.data_type()),
-                })?;
-
-        let len = left_ints.len().max(right_ints.len());
-        let mut bool_array = Vec::with_capacity(len);
-
-        for i in 0..len {
-            let left_val = if left_ints.len() == 1 {
-                left_ints.value(0)
-            } else {
-                left_ints.value(i)
-            };
-            let right_val = if right_ints.len() == 1 {
-                right_ints.value(0)
-            } else {
-                right_ints.value(i)
-            };
-            bool_array.push(left_val > right_val);
-        }
-
-        Ok(Arc::new(BooleanArray::from(bool_array)) as Arc<dyn arrow::array::Array>)
+        let (l, r) = align_operands(left, right)?;
+        let res = arrow_ord::cmp::gt(&l, &r).map_err(ExpressionError::ArrowError)?;
+        Ok(Arc::new(res) as Arc<dyn arrow::array::Array>)
     }
 
-    /// Greater than or equal comparison (Int64 only for now)
+    /// Greater than or equal comparison
     pub fn greater_than_equal(
         left: &ArrayRef,
         right: &ArrayRef,
     ) -> Result<Arc<dyn arrow::array::Array>, ExpressionError> {
-        let left_ints =
-            left.as_any()
-                .downcast_ref::<Int64Array>()
-                .ok_or(ExpressionError::TypeMismatch {
-                    expected: "Int64".to_string(),
-                    actual: format!("{:?}", left.data_type()),
-                })?;
-        let right_ints =
-            right
-                .as_any()
-                .downcast_ref::<Int64Array>()
-                .ok_or(ExpressionError::TypeMismatch {
-                    expected: "Int64".to_string(),
-                    actual: format!("{:?}", right.data_type()),
-                })?;
-
-        let len = left_ints.len().max(right_ints.len());
-        let mut bool_array = Vec::with_capacity(len);
-
-        for i in 0..len {
-            let left_val = if left_ints.len() == 1 {
-                left_ints.value(0)
-            } else {
-                left_ints.value(i)
-            };
-            let right_val = if right_ints.len() == 1 {
-                right_ints.value(0)
-            } else {
-                right_ints.value(i)
-            };
-            bool_array.push(left_val >= right_val);
-        }
-
-        Ok(Arc::new(BooleanArray::from(bool_array)) as Arc<dyn arrow::array::Array>)
+        let (l, r) = align_operands(left, right)?;
+        let res = arrow_ord::cmp::gt_eq(&l, &r).map_err(ExpressionError::ArrowError)?;
+        Ok(Arc::new(res) as Arc<dyn arrow::array::Array>)
     }
 }
 
@@ -243,5 +107,23 @@ mod tests {
         assert_eq!(result_array.value(0), true);
         assert_eq!(result_array.value(1), true);
         assert_eq!(result_array.value(2), true);
+    }
+
+    #[test]
+    fn test_comparison_equal_and_not_equal() {
+        let left_ref = Arc::new(Int64Array::from(vec![1, 2, 3])) as ArrayRef;
+        let right_ref = Arc::new(Int64Array::from(vec![1, 5, 3])) as ArrayRef;
+
+        let eq_res = ComparisonOps::equal(&left_ref, &right_ref).unwrap();
+        let eq_arr = eq_res.as_any().downcast_ref::<BooleanArray>().unwrap();
+        assert_eq!(eq_arr.value(0), true);
+        assert_eq!(eq_arr.value(1), false);
+        assert_eq!(eq_arr.value(2), true);
+
+        let neq_res = ComparisonOps::not_equal(&left_ref, &right_ref).unwrap();
+        let neq_arr = neq_res.as_any().downcast_ref::<BooleanArray>().unwrap();
+        assert_eq!(neq_arr.value(0), false);
+        assert_eq!(neq_arr.value(1), true);
+        assert_eq!(neq_arr.value(2), false);
     }
 }

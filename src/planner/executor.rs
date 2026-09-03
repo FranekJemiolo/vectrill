@@ -355,6 +355,7 @@ impl ExecutionGraph {
             ));
         }
 
+        order.reverse();
         Ok(order)
     }
 

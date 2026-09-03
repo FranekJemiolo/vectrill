@@ -1,77 +1,63 @@
-//! Filter operator - filters records based on a predicate expression
+//! Filter operator for streaming data processing
 
 use std::sync::Arc;
+
+use arrow::record_batch::RecordBatch;
 
 use crate::error::VectrillError;
 use crate::expression::{create_physical_expr, Expr, PhysicalExpr};
 use crate::operators::pipeline::Operator as PipelineOperator;
 use crate::optimization::fusion::FusableOperator;
-use crate::RecordBatch;
 
-/// Filter operator that applies a predicate to filter records
-#[derive(Debug)]
+/// Filter operator that filters rows based on a predicate expression
 pub struct FilterOperator {
-    /// The predicate expression to evaluate
     predicate: Arc<dyn PhysicalExpr>,
 }
 
 impl FilterOperator {
-    /// Create a new filter operator with the given predicate
+    /// Create a new filter operator with a physical predicate expression
     pub fn new(predicate: Arc<dyn PhysicalExpr>) -> Self {
         Self { predicate }
     }
 
-    /// Create a filter operator from an expression IR
+    /// Create a new filter operator from a logical expression
     pub fn from_expr(
         expr: &Expr,
         schema: arrow::datatypes::SchemaRef,
     ) -> Result<Self, VectrillError> {
-        let physical_expr = create_physical_expr(expr, &schema)
+        let physical_predicate = create_physical_expr(expr, &schema)
             .map_err(|e| VectrillError::ExpressionError(e.to_string()))?;
-        Ok(Self::new(physical_expr))
+
+        // Validate that predicate returns boolean
+        if physical_predicate.data_type() != &arrow::datatypes::DataType::Boolean {
+            return Err(VectrillError::ExpressionError(format!(
+                "Predicate must return boolean, got {:?}",
+                physical_predicate.data_type()
+            )));
+        }
+
+        Ok(Self::new(physical_predicate))
     }
 
-    /// Apply the filter to a record batch
-    pub fn apply(
-        &self,
-        batch: &arrow::record_batch::RecordBatch,
-    ) -> Result<arrow::record_batch::RecordBatch, VectrillError> {
-        // Evaluate the predicate
-        let mask_array = self
+    /// Apply filter to a RecordBatch
+    pub fn apply(&self, batch: &RecordBatch) -> Result<RecordBatch, VectrillError> {
+        // Evaluate predicate against the batch
+        let mask = self
             .predicate
             .evaluate(batch)
             .map_err(|e| VectrillError::ExpressionError(e.to_string()))?;
 
-        // Convert to boolean array
-        let mask = mask_array
+        // Downcast to BooleanArray
+        let mask = mask
             .as_any()
             .downcast_ref::<arrow::array::BooleanArray>()
             .ok_or_else(|| {
                 VectrillError::ExpressionError("Predicate must return boolean array".to_string())
             })?;
 
-        // Apply the filter using simplified implementation
-        let mut filtered_columns = Vec::new();
-        let num_rows = mask.len();
-        let mut selected_indices = Vec::new();
-
-        for i in 0..num_rows {
-            if mask.value(i) {
-                selected_indices.push(i);
-            }
-        }
-
-        // Filter each column
-        for col_idx in 0..batch.num_columns() {
-            let column = batch.column(col_idx);
-            let filtered_column = filter_column(column, &selected_indices)?;
-            filtered_columns.push(filtered_column);
-        }
-
-        // Create new batch with filtered columns
-        let filtered_batch =
-            arrow::record_batch::RecordBatch::try_new(batch.schema(), filtered_columns)
-                .map_err(|e| VectrillError::ArrowError(e.to_string()))?;
+        // Apply the filter using Arrow compute kernel
+        let filtered_batch = arrow::compute::filter_record_batch(batch, mask)
+            .map_err(|e| VectrillError::ArrowError(e.to_string()))?;
 
         Ok(filtered_batch)
     }
@@ -89,38 +75,12 @@ impl FusableOperator for FilterOperator {
     }
 
     fn predicate(&self) -> Option<&Expr> {
-        // FilterOperator has a predicate but it's a PhysicalExpr, not Expr
-        // For fusion purposes, we'd need to convert back to Expr or store the original
         None
     }
 
     fn projection(&self) -> Option<&[String]> {
         None
     }
-}
-
-/// Filter a column based on selected indices
-fn filter_column(
-    column: &arrow::array::ArrayRef,
-    indices: &[usize],
-) -> Result<arrow::array::ArrayRef, VectrillError> {
-    use arrow::array::{Array, BooleanArray, PrimitiveArray, StringArray};
-
-    if indices.is_empty() {
-        // Return empty array of same type
-        return match column.data_type() {
-            arrow::datatypes::DataType::Int64 => Ok(Arc::new(PrimitiveArray::<
-                arrow::datatypes::Int64Type,
-            >::from(vec![0i64; 0]))),
-            arrow::datatypes::DataType::Utf8 => Ok(Arc::new(StringArray::from(vec![""; 0]))),
-            arrow::datatypes::DataType::Boolean => Ok(Arc::new(BooleanArray::from(vec![false; 0]))),
-            _ => Ok(arrow::array::new_null_array(column.data_type(), 0)),
-        };
-    }
-
-    // For simplicity, just return the original column if we have any selected rows
-    // In a real implementation, we would properly filter the column
-    Ok(column.clone())
 }
 
 #[cfg(test)]
@@ -163,8 +123,8 @@ mod tests {
         // Apply filter
         let result = filter_op.apply(&batch).unwrap();
 
-        // Verify results
-        assert_eq!(result.num_rows(), 5); // Simplified implementation keeps all rows
+        // Verify results: only id = 4, 5 match
+        assert_eq!(result.num_rows(), 2);
         assert_eq!(result.num_columns(), 2);
 
         let id_array = result
@@ -172,11 +132,8 @@ mod tests {
             .as_any()
             .downcast_ref::<Int64Array>()
             .unwrap();
-        assert_eq!(id_array.value(0), 1);
-        assert_eq!(id_array.value(1), 2);
-        assert_eq!(id_array.value(2), 3);
-        assert_eq!(id_array.value(3), 4);
-        assert_eq!(id_array.value(4), 5);
+        assert_eq!(id_array.value(0), 4);
+        assert_eq!(id_array.value(1), 5);
     }
 
     #[test]
@@ -212,8 +169,8 @@ mod tests {
         // Apply filter
         let result = filter_op.apply(&batch).unwrap();
 
-        // Verify results
-        assert_eq!(result.num_rows(), 5); // Simplified implementation keeps all rows
+        // Verify results: rows with id 1, 3, 5 match
+        assert_eq!(result.num_rows(), 3);
 
         let id_array = result
             .column(0)
@@ -221,9 +178,7 @@ mod tests {
             .downcast_ref::<Int64Array>()
             .unwrap();
         assert_eq!(id_array.value(0), 1);
-        assert_eq!(id_array.value(1), 2);
-        assert_eq!(id_array.value(2), 3);
-        assert_eq!(id_array.value(3), 4);
-        assert_eq!(id_array.value(4), 5);
+        assert_eq!(id_array.value(1), 3);
+        assert_eq!(id_array.value(2), 5);
     }
 }

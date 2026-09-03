@@ -94,33 +94,33 @@ impl FileSink {
     fn write_csv_batch(&mut self, batch: &RecordBatch) -> Result<()> {
         self.write_csv_header()?;
 
-        let arrow_batch = batch;
+        if let Some(ref writer) = self.writer {
+            let mut writer_guard = writer.lock().map_err(|e| {
+                VectrillError::Connector(format!("Failed to acquire writer lock: {}", e))
+            })?;
 
-        for row_idx in 0..arrow_batch.num_rows() {
-            let mut values = Vec::new();
+            let mut buffer = Vec::with_capacity(batch.num_rows() * 64);
+            for row_idx in 0..batch.num_rows() {
+                let mut values = Vec::with_capacity(batch.num_columns());
 
-            for col_idx in 0..arrow_batch.num_columns() {
-                let array = arrow_batch.column(col_idx);
-                let value = if array.is_null(row_idx) {
-                    String::new()
-                } else {
-                    self.arrow_value_to_string(array, row_idx)?
-                };
-                values.push(value);
+                for col_idx in 0..batch.num_columns() {
+                    let array = batch.column(col_idx);
+                    let value = if array.is_null(row_idx) {
+                        String::new()
+                    } else {
+                        let raw = self.arrow_value_to_string(array, row_idx)?;
+                        escape_csv_field(&raw)
+                    };
+                    values.push(value);
+                }
+
+                buffer.extend_from_slice(values.join(",").as_bytes());
+                buffer.push(b'\n');
             }
 
-            let line = values.join(",");
-            if let Some(ref writer) = self.writer {
-                let mut writer_guard = writer.lock().map_err(|e| {
-                    VectrillError::Connector(format!("Failed to acquire writer lock: {}", e))
-                })?;
-                writer_guard.write_all(line.as_bytes()).map_err(|e| {
-                    VectrillError::Connector(format!("Failed to write CSV line: {}", e))
-                })?;
-                writer_guard.write_all(b"\n").map_err(|e| {
-                    VectrillError::Connector(format!("Failed to write newline: {}", e))
-                })?;
-            }
+            writer_guard.write_all(&buffer).map_err(|e| {
+                VectrillError::Connector(format!("Failed to write CSV batch: {}", e))
+            })?;
         }
 
         Ok(())
@@ -128,22 +128,21 @@ impl FileSink {
 
     /// Write a batch in JSON format
     fn write_json_batch(&mut self, batch: &RecordBatch) -> Result<()> {
-        let arrow_batch = batch;
+        if let Some(ref writer) = self.writer {
+            let mut writer_guard = writer.lock().map_err(|e| {
+                VectrillError::Connector(format!("Failed to acquire writer lock: {}", e))
+            })?;
 
-        for row_idx in 0..arrow_batch.num_rows() {
-            let json_line = self.serialize_row_as_json(arrow_batch, row_idx)?;
-
-            if let Some(ref writer) = self.writer {
-                let mut writer_guard = writer.lock().map_err(|e| {
-                    VectrillError::Connector(format!("Failed to acquire writer lock: {}", e))
-                })?;
-                writer_guard.write_all(json_line.as_bytes()).map_err(|e| {
-                    VectrillError::Connector(format!("Failed to write JSON line: {}", e))
-                })?;
-                writer_guard.write_all(b"\n").map_err(|e| {
-                    VectrillError::Connector(format!("Failed to write newline: {}", e))
-                })?;
+            let mut buffer = Vec::with_capacity(batch.num_rows() * 128);
+            for row_idx in 0..batch.num_rows() {
+                let json_line = self.serialize_row_as_json(batch, row_idx)?;
+                buffer.extend_from_slice(json_line.as_bytes());
+                buffer.push(b'\n');
             }
+
+            writer_guard.write_all(&buffer).map_err(|e| {
+                VectrillError::Connector(format!("Failed to write JSON batch: {}", e))
+            })?;
         }
 
         Ok(())
@@ -297,6 +296,16 @@ impl Sink for FileSink {
                 .map_err(|e| VectrillError::Connector(format!("Failed to flush file: {}", e)))?;
         }
         Ok(())
+    }
+}
+
+/// Escape a CSV field if it contains commas, quotes, or newlines
+fn escape_csv_field(val: &str) -> String {
+    if val.contains(',') || val.contains('"') || val.contains('\n') || val.contains('\r') {
+        let escaped = val.replace('"', "\"\"");
+        format!("\"{}\"", escaped)
+    } else {
+        val.to_string()
     }
 }
 
